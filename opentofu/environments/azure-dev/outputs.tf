@@ -1,7 +1,7 @@
-output "instance_id" {
-  value = module.compute.instance_id
+output "instance_ids" {
+  value = { for k, m in module.compute : k => m.instance_id }
 }
 
-output "instance_ip" {
-  value = module.compute.instance_ip
+output "instance_ips" {
+  value = { for k, m in module.compute : k => m.instance_ip }
 }

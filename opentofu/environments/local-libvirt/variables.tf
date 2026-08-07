@@ -21,6 +21,18 @@ variable "vcpu" {
   default     = 2
 }
 
+variable "server_count" {
+  description = "k3s 서버(control-plane) 노드 수"
+  type        = number
+  default     = 1
+}
+
+variable "agent_count" {
+  description = "k3s 에이전트(worker) 노드 수. 로컬 환경은 이중화 검증을 위해 기본 1"
+  type        = number
+  default     = 1
+}
+
 variable "memory_mb" {
   description = "메모리 (MB)"
   type        = number

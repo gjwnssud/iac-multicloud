@@ -16,6 +16,18 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
+variable "server_count" {
+  description = "k3s 서버(control-plane) 노드 수"
+  type        = number
+  default     = 1
+}
+
+variable "agent_count" {
+  description = "k3s 에이전트(worker) 노드 수"
+  type        = number
+  default     = 0
+}
+
 variable "image" {
   description = "AMI ID"
   type        = string

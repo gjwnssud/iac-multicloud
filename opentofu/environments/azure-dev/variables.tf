@@ -16,6 +16,18 @@ variable "instance_type" {
   default     = "Standard_B1s"
 }
 
+variable "server_count" {
+  description = "k3s 서버(control-plane) 노드 수"
+  type        = number
+  default     = 1
+}
+
+variable "agent_count" {
+  description = "k3s 에이전트(worker) 노드 수"
+  type        = number
+  default     = 0
+}
+
 variable "allowed_ssh_cidrs" {
   description = "SSH 접근을 허용할 CIDR 목록"
   type        = list(string)
