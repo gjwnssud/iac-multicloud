@@ -37,6 +37,8 @@ dist/
 .idea/
 .vscode/
 
-# 전역 gitignore(~/.gitignore_global)가 CLAUDE.md를 제외하지만
-# 이 저장소는 계획 문서로 커밋 관리한다.
+# 전역 gitignore(~/.gitignore_global)가 CLAUDE.md와 docs/를 제외하지만
+# 이 저장소는 계획 문서/온보딩 가이드를 커밋 관리한다.
 !CLAUDE.md
+!docs/
+!docs/**
