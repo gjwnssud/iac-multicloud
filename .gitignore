@@ -28,6 +28,10 @@ secrets.yml
 secrets.yaml
 .env
 
+# Node.js
+node_modules/
+dist/
+
 # OS / editor
 .DS_Store
 .idea/

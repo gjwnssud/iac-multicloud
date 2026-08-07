@@ -72,4 +72,5 @@
     regexp: 'https://127\.0\.0\.1:6443'
     replace: "https://{{ ansible_host | default(inventory_hostname) }}:6443"
   delegate_to: localhost
+  become: false
   when: k3s_role == 'server'

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-nestjs-local-mac
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gjwnssud/iac-multicloud.git
+    targetRevision: main
+    path: apps/hello-nestjs/chart
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-local-mac.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hello-nestjs
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

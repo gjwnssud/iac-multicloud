@@ -1,0 +1,24 @@
+# aws 클러스터에 1회 적용하는 app-of-apps 루트.
+# argocd/apps/ 디렉토리에서 이 클러스터에 해당하는 Application만 골라
+# 동기화한다 (클러스터별 독립 ArgoCD 설계 - 다른 클러스터의 Application은
+# 애초에 이 클러스터에 존재하지도 않는 서버를 destination으로 갖는다).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-aws
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gjwnssud/iac-multicloud.git
+    targetRevision: main
+    path: argocd/apps
+    directory:
+      include: "*-aws.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
