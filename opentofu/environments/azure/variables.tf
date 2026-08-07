@@ -7,7 +7,7 @@ variable "location" {
 variable "name" {
   description = "리소스 이름 접두사"
   type        = string
-  default     = "iac-multicloud-azure-dev"
+  default     = "iac-multicloud-azure"
 }
 
 variable "instance_type" {

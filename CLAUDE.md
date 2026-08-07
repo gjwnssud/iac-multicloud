@@ -35,9 +35,9 @@ iac-multicloud/
 │   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM
 │   │   └── network/            # 공통 인터페이스 (VPC/subnet 추상화)
 │   ├── environments/
-│   │   ├── aws-dev/
-│   │   ├── gcp-dev/
-│   │   ├── azure-dev/
+│   │   ├── aws/
+│   │   ├── gcp/
+│   │   ├── azure/
 │   │   └── local-libvirt/      # 로컬 VM 환경
 │   └── templates/
 │       └── inventory.tpl       # tofu output → ansible inventory 자동 생성

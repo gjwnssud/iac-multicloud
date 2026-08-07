@@ -17,6 +17,6 @@ terraform {
   #   resource_group_name  = "iac-multicloud-tfstate-rg"
   #   storage_account_name = "iacmulticloudtfstate"
   #   container_name       = "tfstate"
-  #   key                  = "azure-dev.terraform.tfstate"
+  #   key                  = "azure.terraform.tfstate"
   # }
 }
