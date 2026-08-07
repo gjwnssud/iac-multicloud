@@ -32,13 +32,16 @@ iac-multicloud/
 │   │   ├── compute-aws/        # EC2 (또는 EKS)
 │   │   ├── compute-gcp/        # Compute Engine (또는 GKE)
 │   │   ├── compute-azure/      # Azure VM (또는 AKS)
-│   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM
+│   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM (리눅스 호스트 전용)
+│   │   ├── compute-lima/       # 로컬 Lima VM (macOS 호스트 전용, limactl 구동)
 │   │   └── network/            # 공통 인터페이스 (VPC/subnet 추상화)
 │   ├── environments/
 │   │   ├── aws/
 │   │   ├── gcp/
 │   │   ├── azure/
-│   │   └── local-libvirt/      # 로컬 VM 환경
+│   │   ├── local-libvirt/      # 로컬 리눅스 서버/VM 환경
+│   │   └── local-mac/          # 로컬 macOS 환경 (Lima)
+│   ├── bootstrap/               # 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성
 │   └── templates/
 │       └── inventory.tpl       # tofu output → ansible inventory 자동 생성
 ├── ansible/
