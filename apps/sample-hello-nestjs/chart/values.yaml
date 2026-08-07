@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: hello-nestjs
+  repository: sample-hello-nestjs
   tag: latest
   pullPolicy: IfNotPresent
 

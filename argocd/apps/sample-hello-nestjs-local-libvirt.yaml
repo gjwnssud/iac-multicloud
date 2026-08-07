@@ -1,21 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: hello-nestjs-aws
+  name: sample-hello-nestjs-local-libvirt
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/gjwnssud/iac-multicloud.git
     targetRevision: main
-    path: apps/hello-nestjs/chart
+    path: apps/sample-hello-nestjs/chart
     helm:
       valueFiles:
         - values.yaml
-        - values-aws.yaml
+        - values-local-libvirt.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: hello-nestjs
+    namespace: sample-hello-nestjs
   syncPolicy:
     automated:
       prune: true

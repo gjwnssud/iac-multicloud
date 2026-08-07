@@ -1,5 +1,5 @@
 apiVersion: v2
-name: hello-nestjs
+name: sample-hello-nestjs
 description: iac-multicloud 검증용 샘플 NestJS 앱
 type: application
 version: 0.1.0

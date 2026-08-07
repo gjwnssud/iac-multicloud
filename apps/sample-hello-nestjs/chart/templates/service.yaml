@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "hello-nestjs.fullname" . }}
+  name: {{ include "sample-hello-nestjs.fullname" . }}
   labels:
-    {{- include "hello-nestjs.labels" . | nindent 4 }}
+    {{- include "sample-hello-nestjs.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -11,4 +11,4 @@ spec:
       targetPort: {{ .Values.service.targetPort }}
       protocol: TCP
   selector:
-    {{- include "hello-nestjs.labels" . | nindent 4 }}
+    {{- include "sample-hello-nestjs.labels" . | nindent 4 }}
