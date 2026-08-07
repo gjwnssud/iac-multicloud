@@ -1,0 +1,127 @@
+name: Infra Deploy
+
+# main 머지 시 인프라(tofu apply)와 k3s+ArgoCD 부트스트랩(ansible)까지만 담당한다.
+# 앱 배포는 각 클러스터의 ArgoCD가 git polling으로 처리하므로 여기서 트리거하지 않는다.
+#
+# 사전 준비 (1회):
+#   1) opentofu/bootstrap/{aws,gcp,azure}를 로컬에서 apply해 원격 state 저장소 생성
+#   2) 아래 vars/secrets를 리포지토리(또는 environment)에 등록
+#   3) local-libvirt 배포를 위해 사설망 내부에 self-hosted runner 등록 (label: self-hosted, local)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "opentofu/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+
+jobs:
+  deploy:
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [aws, gcp, azure, local-libvirt]
+    runs-on: ${{ matrix.environment == 'local-libvirt' && fromJSON('["self-hosted", "local"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: opentofu/environments/${{ matrix.environment }}
+    env:
+      TF_VAR_allowed_ssh_cidrs: ${{ vars.ALLOWED_SSH_CIDRS }}
+      TF_VAR_ssh_public_key: ${{ vars.SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_username: ${{ vars.SSH_USERNAME }}
+      TF_VAR_image: ${{ matrix.environment == 'aws' && vars.AWS_AMI_ID || '' }}
+      TF_VAR_project: ${{ vars.GCP_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.12.5"
+
+      - name: AWS 자격증명 설정
+        if: matrix.environment == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: GCP 자격증명 설정
+        if: matrix.environment == 'gcp'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Azure 자격증명 설정
+        if: matrix.environment == 'azure'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 원격 backend 부트스트랩 리소스(opentofu/bootstrap/*)가 아직 없으면
+      # 아래 init은 backend 필수 값 누락으로 실패한다 (의도된 안전장치).
+      - name: tofu init (AWS backend)
+        if: matrix.environment == 'aws'
+        run: |
+          tofu init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_AWS }}" \
+            -backend-config="key=aws/terraform.tfstate" \
+            -backend-config="region=ap-northeast-2" \
+            -backend-config="dynamodb_table=${{ vars.TF_STATE_LOCK_TABLE_AWS }}"
+
+      - name: tofu init (GCP backend)
+        if: matrix.environment == 'gcp'
+        run: |
+          tofu init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_GCP }}" \
+            -backend-config="prefix=gcp"
+
+      - name: tofu init (Azure backend)
+        if: matrix.environment == 'azure'
+        run: |
+          tofu init -input=false \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG_AZURE }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_ACCOUNT_AZURE }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=azure.terraform.tfstate"
+
+      - name: tofu init (local backend)
+        if: matrix.environment == 'local-libvirt'
+        run: tofu init -input=false
+
+      - name: GitHub Actions 러너 공인 IP 조회 (클라우드 환경만)
+        if: matrix.environment != 'local-libvirt'
+        id: runner_ip
+        run: echo "cidr=$(curl -s https://checkip.amazonaws.com)/32" >> "$GITHUB_OUTPUT"
+
+      - name: tofu apply
+        run: |
+          if [ "${{ matrix.environment }}" != "local-libvirt" ]; then
+            EXTRA_SSH_CIDR='["${{ steps.runner_ip.outputs.cidr }}"]'
+            MERGED=$(jq -c -s '.[0] + .[1]' <(echo "$TF_VAR_allowed_ssh_cidrs") <(echo "$EXTRA_SSH_CIDR"))
+            export TF_VAR_allowed_ssh_cidrs="$MERGED"
+          fi
+          tofu apply -input=false -auto-approve
+
+      - name: SSH 개인키 준비
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Ansible 컬렉션 설치
+        working-directory: ansible
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: k3s + ArgoCD 부트스트랩 (Ansible)
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            -i inventories/${{ matrix.environment }}/hosts.ini \
+            playbooks/site.yml \
+            --private-key ~/.ssh/id_ed25519

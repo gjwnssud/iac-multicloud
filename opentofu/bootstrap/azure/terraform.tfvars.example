@@ -1,0 +1,2 @@
+name_prefix = "iacmulticloudtfstateCHANGEME" # 전역 유일한 스토리지 계정 이름으로 교체할 것 (소문자+숫자만)
+location    = "koreacentral"

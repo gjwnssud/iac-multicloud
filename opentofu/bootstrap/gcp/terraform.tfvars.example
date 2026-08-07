@@ -1,0 +1,2 @@
+project     = "my-gcp-project-id"
+bucket_name = "iac-multicloud-tfstate-CHANGEME" # 전역 유일 이름으로 교체할 것

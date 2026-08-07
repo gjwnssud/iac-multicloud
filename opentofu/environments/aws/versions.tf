@@ -12,10 +12,12 @@ terraform {
     }
   }
 
-  # 초기에는 local backend로 시작. S3 버킷 프로비저닝(Phase 5) 이후 아래로 전환:
-  # backend "s3" {
-  #   bucket = "iac-multicloud-tfstate"
-  #   key    = "aws/terraform.tfstate"
-  #   region = "ap-northeast-2"
-  # }
+  # opentofu/bootstrap/aws를 먼저 apply해 S3 버킷+DynamoDB 테이블을 만든 뒤
+  # partial config로 연결한다 (bucket/key/region/dynamodb_table을
+  # -backend-config 플래그 또는 backend.hcl로 주입, CI는 plan.yml/deploy.yml 참고):
+  #   tofu init -backend-config="bucket=<bootstrap output>" \
+  #             -backend-config="key=aws/terraform.tfstate" \
+  #             -backend-config="region=ap-northeast-2" \
+  #             -backend-config="dynamodb_table=<bootstrap output>"
+  backend "s3" {}
 }

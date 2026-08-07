@@ -12,9 +12,9 @@ terraform {
     }
   }
 
-  # 초기에는 local backend로 시작. GCS 버킷 프로비저닝(Phase 5) 이후 아래로 전환:
-  # backend "gcs" {
-  #   bucket = "iac-multicloud-tfstate"
-  #   prefix = "gcp"
-  # }
+  # opentofu/bootstrap/gcp를 먼저 apply해 GCS 버킷을 만든 뒤
+  # partial config로 연결한다 (CI는 plan.yml/deploy.yml 참고):
+  #   tofu init -backend-config="bucket=<bootstrap output>" \
+  #             -backend-config="prefix=gcp"
+  backend "gcs" {}
 }

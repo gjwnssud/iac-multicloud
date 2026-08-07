@@ -12,11 +12,11 @@ terraform {
     }
   }
 
-  # 초기에는 local backend로 시작. Storage Account 프로비저닝(Phase 5) 이후 아래로 전환:
-  # backend "azurerm" {
-  #   resource_group_name  = "iac-multicloud-tfstate-rg"
-  #   storage_account_name = "iacmulticloudtfstate"
-  #   container_name       = "tfstate"
-  #   key                  = "azure.terraform.tfstate"
-  # }
+  # opentofu/bootstrap/azure를 먼저 apply해 Storage Account를 만든 뒤
+  # partial config로 연결한다 (CI는 plan.yml/deploy.yml 참고):
+  #   tofu init -backend-config="resource_group_name=<bootstrap output>" \
+  #             -backend-config="storage_account_name=<bootstrap output>" \
+  #             -backend-config="container_name=tfstate" \
+  #             -backend-config="key=azure.terraform.tfstate"
+  backend "azurerm" {}
 }
