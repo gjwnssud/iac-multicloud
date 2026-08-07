@@ -1,0 +1,6 @@
+project           = "my-gcp-project-id"
+region            = "asia-northeast3"
+zone              = "asia-northeast3-a"
+allowed_ssh_cidrs = ["203.0.113.0/24"] # 실제 접속 대역으로 교체할 것
+ssh_username      = "ubuntu"
+ssh_public_key    = "ssh-ed25519 AAAA... user@example.com"

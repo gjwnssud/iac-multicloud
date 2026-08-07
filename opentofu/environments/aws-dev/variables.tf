@@ -1,0 +1,32 @@
+variable "region" {
+  description = "AWS 리전"
+  type        = string
+  default     = "ap-northeast-2"
+}
+
+variable "name" {
+  description = "리소스 이름 접두사"
+  type        = string
+  default     = "iac-multicloud-aws-dev"
+}
+
+variable "instance_type" {
+  description = "EC2 인스턴스 타입"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "image" {
+  description = "AMI ID"
+  type        = string
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "SSH 접근을 허용할 CIDR 목록"
+  type        = list(string)
+}
+
+variable "ssh_public_key" {
+  description = "인스턴스에 등록할 SSH 공개키"
+  type        = string
+}
