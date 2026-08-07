@@ -1,0 +1,43 @@
+---
+- name: apt 캐시 갱신
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: 필수 패키지 설치
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - open-iscsi
+      - ufw
+    state: present
+
+- name: 타임존 설정
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: 현재 접속 계정의 비밀번호 없는 sudo 허용
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ ansible_user }}"
+    content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: UFW 허용 - SSH
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: UFW 기본 정책 설정 (incoming deny, outgoing allow)
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+
+- name: UFW 활성화
+  community.general.ufw:
+    state: enabled

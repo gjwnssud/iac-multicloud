@@ -1,0 +1,59 @@
+---
+- name: Helm 설치 스크립트 다운로드
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get-helm-3.sh
+    mode: "0755"
+
+- name: Helm 설치
+  ansible.builtin.command: /tmp/get-helm-3.sh
+  args:
+    creates: /usr/local/bin/helm
+
+- name: argo-helm 저장소 등록
+  ansible.builtin.command: "helm repo add argo {{ argocd_helm_repo_url }}"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: argocd_repo_add
+  changed_when: "'already exists' not in argocd_repo_add.stdout"
+
+- name: helm repo 업데이트
+  ansible.builtin.command: helm repo update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: ArgoCD 설치/업그레이드 (Helm)
+  ansible.builtin.command: >
+    helm upgrade --install argocd argo/argo-cd
+    --namespace {{ argocd_namespace }}
+    --create-namespace
+    {{ ('--version ' + argocd_chart_version) if argocd_chart_version != '' else '' }}
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: argocd_helm_install
+  changed_when: "'STATUS: deployed' in argocd_helm_install.stdout"
+
+- name: argocd-server Deployment Ready 대기
+  ansible.builtin.command: >
+    kubectl wait --for=condition=available --timeout=300s
+    deployment/argocd-server -n {{ argocd_namespace }}
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: 초기 admin 비밀번호 조회
+  ansible.builtin.command: >
+    kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret
+    -o jsonpath={.data.password}
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: argocd_admin_password_b64
+  changed_when: false
+
+- name: 초기 admin 비밀번호 출력
+  ansible.builtin.debug:
+    msg: >-
+      ArgoCD admin 초기 비밀번호: {{ argocd_admin_password_b64.stdout | b64decode }}
+      (UI 접근: kubectl port-forward svc/argocd-server -n {{ argocd_namespace }} 8080:443
+      후 https://localhost:8080)

@@ -30,3 +30,9 @@ variable "ssh_public_key" {
   description = "인스턴스에 등록할 SSH 공개키"
   type        = string
 }
+
+variable "ssh_private_key_path" {
+  description = "ssh_public_key에 대응하는 로컬 개인키 경로. 비워두면 ansible inventory에 명시하지 않음"
+  type        = string
+  default     = ""
+}

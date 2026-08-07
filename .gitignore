@@ -17,6 +17,8 @@ terraform.rc
 *.retry
 ansible/inventories/*/hosts.ini
 !ansible/inventories/.gitkeep
+ansible/.ansible/
+ansible/fetched/
 
 # Secrets
 *.pem

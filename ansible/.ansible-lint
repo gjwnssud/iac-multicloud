@@ -1,0 +1,6 @@
+profile: min
+
+skip_list:
+  # 이 저장소는 task name을 한국어로 작성한다 (CLAUDE.md 언어 정책).
+  # name[casing]은 라틴 문자 대문자 시작을 전제하는 규칙이라 한국어 이름과는 근본적으로 맞지 않는다.
+  - name[casing]

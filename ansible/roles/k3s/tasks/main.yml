@@ -1,0 +1,75 @@
+---
+- name: UFW 허용 - k3s API (6443/tcp)
+  community.general.ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+
+- name: UFW 허용 - kubelet (10250/tcp)
+  community.general.ufw:
+    rule: allow
+    port: "10250"
+    proto: tcp
+
+- name: UFW 허용 - flannel VXLAN (8472/udp)
+  community.general.ufw:
+    rule: allow
+    port: "8472"
+    proto: udp
+
+- name: k3s 설치 스크립트 다운로드
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+
+- name: k3s 서버 설치
+  ansible.builtin.command: /tmp/k3s-install.sh
+  args:
+    creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_EXEC: "server {{ k3s_extra_exec_args }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  when: k3s_role == 'server'
+
+- name: k3s 에이전트 설치
+  ansible.builtin.command: /tmp/k3s-install.sh
+  args:
+    creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_EXEC: agent
+    INSTALL_K3S_URL: "{{ k3s_server_url }}"
+    K3S_TOKEN: "{{ k3s_token }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  when: k3s_role == 'agent'
+
+- name: k3s server kubeconfig 생성 대기
+  ansible.builtin.wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+  when: k3s_role == 'server'
+
+- name: 노드 조인 토큰 조회
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_node_token_raw
+  when: k3s_role == 'server'
+
+- name: 노드 조인 토큰 fact 등록 (다른 host의 play에서 hostvars로 참조)
+  ansible.builtin.set_fact:
+    k3s_node_token: "{{ k3s_node_token_raw.content | b64decode | trim }}"
+  when: k3s_role == 'server'
+
+- name: kubeconfig 컨트롤 노드로 가져오기
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ k3s_kubeconfig_fetch_dir }}/{{ inventory_hostname }}-kubeconfig.yaml"
+    flat: true
+  when: k3s_role == 'server'
+
+- name: kubeconfig 서버 주소를 노드 접속 주소로 치환
+  ansible.builtin.replace:
+    path: "{{ k3s_kubeconfig_fetch_dir }}/{{ inventory_hostname }}-kubeconfig.yaml"
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ ansible_host | default(inventory_hostname) }}:6443"
+  delegate_to: localhost
+  when: k3s_role == 'server'

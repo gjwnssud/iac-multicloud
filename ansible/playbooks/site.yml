@@ -1,0 +1,30 @@
+---
+- name: 공통 base 설정
+  hosts: k3s_cluster
+  become: true
+  roles:
+    - common
+
+- name: k3s 서버 부트스트랩
+  hosts: k3s_servers
+  become: true
+  vars:
+    k3s_role: server
+  roles:
+    - k3s
+
+- name: k3s 에이전트 조인
+  hosts: k3s_agents
+  become: true
+  vars:
+    k3s_role: agent
+    k3s_server_url: "https://{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] | default(groups['k3s_servers'][0]) }}:6443"
+    k3s_token: "{{ hostvars[groups['k3s_servers'][0]]['k3s_node_token'] }}"
+  roles:
+    - k3s
+
+- name: ArgoCD 설치 (클러스터별 독립)
+  hosts: "{{ groups['k3s_servers'][0] }}"
+  become: true
+  roles:
+    - argocd
