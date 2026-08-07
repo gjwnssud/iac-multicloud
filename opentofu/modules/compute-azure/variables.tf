@@ -14,9 +14,15 @@ variable "location" {
 }
 
 variable "instance_type" {
-  description = "VM 크기"
+  description = "VM 크기. k3s server + ArgoCD 구동에는 최소 4GB RAM 권장 (B1s/B1ms는 OOM 위험)"
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2s"
+}
+
+variable "root_volume_size_gb" {
+  description = "OS 디스크 크기 (GB). containerd 이미지 캐시 공간 확보용"
+  type        = number
+  default     = 20
 }
 
 variable "image" {

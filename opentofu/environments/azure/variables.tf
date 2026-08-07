@@ -11,9 +11,9 @@ variable "name" {
 }
 
 variable "instance_type" {
-  description = "VM 크기"
+  description = "VM 크기. k3s server + ArgoCD 구동에는 최소 4GB RAM 권장"
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2s"
 }
 
 variable "server_count" {

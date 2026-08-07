@@ -34,9 +34,9 @@ variable "agent_count" {
 }
 
 variable "memory_mb" {
-  description = "메모리 (MB)"
+  description = "메모리 (MB). k3s server + ArgoCD 구동에는 최소 4096 권장"
   type        = number
-  default     = 2048
+  default     = 4096
 }
 
 variable "ssh_username" {

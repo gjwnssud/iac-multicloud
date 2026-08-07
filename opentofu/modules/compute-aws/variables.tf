@@ -4,9 +4,15 @@ variable "name" {
 }
 
 variable "instance_type" {
-  description = "EC2 인스턴스 타입"
+  description = "EC2 인스턴스 타입. k3s server + ArgoCD 구동에는 최소 4GB RAM 권장 (t3.micro/small은 OOM 위험)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
+}
+
+variable "root_volume_size_gb" {
+  description = "루트 볼륨 크기 (GB). containerd 이미지 캐시 공간 확보용"
+  type        = number
+  default     = 20
 }
 
 variable "image" {

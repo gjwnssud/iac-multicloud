@@ -24,6 +24,12 @@ variable "image" {
   type        = string
 }
 
+variable "root_volume_size_gb" {
+  description = "부팅 디스크 크기 (GB). containerd 이미지 캐시 공간 확보용"
+  type        = number
+  default     = 20
+}
+
 variable "subnet_id" {
   description = "network 모듈 output.subnet_id"
   type        = string

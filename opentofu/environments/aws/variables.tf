@@ -11,9 +11,9 @@ variable "name" {
 }
 
 variable "instance_type" {
-  description = "EC2 인스턴스 타입"
+  description = "EC2 인스턴스 타입. k3s server + ArgoCD 구동에는 최소 4GB RAM 권장"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "server_count" {
