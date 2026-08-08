@@ -38,7 +38,7 @@
     creates: /usr/local/bin/k3s
   environment:
     INSTALL_K3S_EXEC: agent
-    INSTALL_K3S_URL: "{{ k3s_server_url }}"
+    K3S_URL: "{{ k3s_server_url }}"
     K3S_TOKEN: "{{ k3s_token }}"
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
   when: k3s_role == 'agent'
@@ -67,8 +67,8 @@
     content: |
       [Unit]
       Description=BuildKit for nerdctl build (k3s containerd worker)
-      After=k3s.service
-      Requires=k3s.service
+      After={{ 'k3s.service' if k3s_role == 'server' else 'k3s-agent.service' }}
+      Requires={{ 'k3s.service' if k3s_role == 'server' else 'k3s-agent.service' }}
 
       [Service]
       ExecStart=/usr/local/bin/buildkitd \
