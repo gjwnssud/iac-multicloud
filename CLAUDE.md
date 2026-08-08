@@ -106,6 +106,32 @@ iac-multicloud/
 ## 7. 리스크 / 추후 결정 사항
 
 - 시크릿 관리: 초기엔 클라우드 네이티브+SOPS로 시작, 팀/규모 커지면 Vault 도입 검토
-- 클라우드 확장 시 EKS/GKE/AKS(관리형) vs VM+k3s(직접 관리) 중 선택 필요 — 비용/운영 부담 비교 후 결정
+- ~~클라우드 확장 시 EKS/GKE/AKS(관리형) vs VM+k3s(직접 관리) 중 선택 필요~~ → **결정 완료**: VM+k3s
+  유지 (비용/재사용 이유). 관리형 K8s가 필요해지면 전환이 아니라 `environments/{cloud}-eks` 같은
+  형태로 **공존** 추가. 로컬은 `local-libvirt`(리눅스 호스트)와 `local-mac`(macOS/Lima)으로 분리
 - **인프라 변경(tofu apply, k3s 부트스트랩)은 여전히 push 기반**: GitHub 호스팅 러너는 로컬 사설망에 도달 불가하므로, 로컬 대상 인프라 작업은 self-hosted runner(로컬 네트워크 내부에 설치) 또는 로컬에서 직접 실행 필요. ArgoCD는 앱 배포 단계에만 적용되며 이 문제를 해결하지 않음
 - ArgoCD sync 방식: 기본 polling(3분 간격) 사용, 즉시 반영이 필요하면 webhook 고려하되 로컬 환경은 인바운드 제약으로 webhook 적용 어려움 — 로컬은 polling 유지 권장
+
+## 8. 진행 상태 및 다음 할 일 (2026-08-08 기준)
+
+Phase 0~7 전체 완료. GitHub 원격 저장소 생성 및 push 완료
+(https://github.com/gjwnssud/iac-multicloud, public).
+
+`local-mac`은 실제로 end-to-end 검증됨(tofu apply → ansible k3s+argocd → 이미지 빌드 →
+helm install → curl 응답 확인). 아래는 아직 안 한 것 — 다음 세션에서 필요할 때 진행:
+
+- [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
+      Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
+      (`terraform.tfvars.example` 참고)
+- [ ] GitHub 저장소에 Actions 시크릿/변수 등록 (`.github/workflows/plan.yml`,`deploy.yml` 참고)
+  - secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
+    `AZURE_CREDENTIALS`, `SSH_PRIVATE_KEY`
+  - vars: `ALLOWED_SSH_CIDRS`, `SSH_PUBLIC_KEY`, `SSH_USERNAME`, `AWS_AMI_ID`, `GCP_PROJECT_ID`,
+    `TF_STATE_BUCKET_AWS`, `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`,
+    `TF_STATE_ACCOUNT_AZURE`
+- [ ] `local-libvirt` 배포용 self-hosted GitHub Actions runner를 사설망 내부에 설치 (label:
+      `self-hosted`, `local`)
+- [ ] 클라우드 3곳(aws/gcp/azure) + `local-libvirt`에 실제 apply/ansible 부트스트랩 → ArgoCD
+      기동 확인 (Phase 4/6 완료 기준의 남은 절반)
+- [ ] 위 항목들 완료 후 `argocd/bootstrap/root-{env}.yaml`을 각 클러스터에 1회 적용해 GitOps
+      루프 실제 동작 확인 (`docs/onboarding.md` 참고)
