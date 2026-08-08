@@ -43,6 +43,53 @@
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
   when: k3s_role == 'agent'
 
+- name: nerdctl 아키텍처 매핑
+  ansible.builtin.set_fact:
+    nerdctl_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: nerdctl-full 다운로드 (nerdctl + buildkit 바이너리 포함)
+  ansible.builtin.get_url:
+    url: "https://github.com/containerd/nerdctl/releases/download/v{{ nerdctl_version }}/nerdctl-full-{{ nerdctl_version }}-linux-{{ nerdctl_arch }}.tar.gz"
+    dest: "/tmp/nerdctl-full-{{ nerdctl_version }}-linux-{{ nerdctl_arch }}.tar.gz"
+    mode: "0644"
+
+- name: nerdctl-full 압축 해제 (/usr/local)
+  ansible.builtin.unarchive:
+    src: "/tmp/nerdctl-full-{{ nerdctl_version }}-linux-{{ nerdctl_arch }}.tar.gz"
+    dest: /usr/local
+    remote_src: true
+    creates: /usr/local/bin/nerdctl
+
+- name: buildkitd systemd 유닛 배치 (k3s containerd 소켓의 k8s.io 네임스페이스로 연결)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/buildkit.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=BuildKit for nerdctl build (k3s containerd worker)
+      After=k3s.service
+      Requires=k3s.service
+
+      [Service]
+      ExecStart=/usr/local/bin/buildkitd \
+        --addr unix:///run/buildkit/buildkitd.sock \
+        --oci-worker=false \
+        --containerd-worker=true \
+        --containerd-worker-addr=/run/k3s/containerd/containerd.sock \
+        --containerd-worker-namespace=k8s.io
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+  register: nerdctl_buildkit_unit
+
+- name: buildkitd 활성화 및 기동
+  ansible.builtin.systemd:
+    name: buildkit
+    daemon_reload: "{{ nerdctl_buildkit_unit.changed }}"
+    enabled: true
+    state: started
+
 - name: k3s server kubeconfig 생성 대기
   ansible.builtin.wait_for:
     path: /etc/rancher/k3s/k3s.yaml

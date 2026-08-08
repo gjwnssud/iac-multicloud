@@ -4,3 +4,4 @@ k3s_extra_exec_args: ""
 k3s_server_url: "" # k3s_role == agent 일 때 필수 (예: https://10.0.1.10:6443)
 k3s_token: "" # k3s_role == agent 일 때 필수
 k3s_kubeconfig_fetch_dir: "{{ playbook_dir }}/../fetched"
+nerdctl_version: "2.3.5" # k3s containerd 소켓에 붙는 nerdctl-full(+buildkit) 버전
