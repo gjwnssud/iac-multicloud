@@ -1,0 +1,5 @@
+registry_role: client # host | client
+registry_version: "2"
+registry_port: 5000
+registry_data_dir: /var/lib/local-registry
+registry_host: "" # host 노드의 접속 주소. registry_role 상관없이 필수 (registries.yaml에 기록됨)

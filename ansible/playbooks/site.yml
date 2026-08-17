@@ -23,6 +23,24 @@
   roles:
     - k3s
 
+- name: 로컬 레지스트리 설치 (k3s 서버 노드)
+  hosts: "{{ groups['k3s_servers'][0] }}"
+  become: true
+  vars:
+    registry_role: host
+    registry_host: "{{ ansible_host | default(inventory_hostname) }}"
+  roles:
+    - registry
+
+- name: 나머지 노드(에이전트)에 레지스트리 mirror 설정
+  hosts: k3s_agents
+  become: true
+  vars:
+    registry_role: client
+    registry_host: "{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] | default(groups['k3s_servers'][0]) }}"
+  roles:
+    - registry
+
 - name: ArgoCD 설치 (클러스터별 독립)
   hosts: "{{ groups['k3s_servers'][0] }}"
   become: true
