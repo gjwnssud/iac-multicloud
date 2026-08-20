@@ -12,6 +12,15 @@ mounts: []
 # 최초 1회 `limactl sudoers | sudo tee /etc/sudoers.d/lima` 실행 필요 (socket_vmnet).
 networks:
   - lima: shared
+# Lima는 게스트 안에서 0.0.0.0으로 바인딩된 포트(예: k3s Traefik의 ServiceLB가 문
+# 80/443)를 기본적으로 호스트에도 자동으로 포워딩한다. 호스트(Mac)에서 nginx 등
+# 별도 서비스가 같은 포트를 쓰려면 이 포트들의 자동 포워딩을 꺼야 포트 충돌이
+# 나지 않는다.
+portForwards:
+  - guestPort: 80
+    ignore: true
+  - guestPort: 443
+    ignore: true
 ssh:
   loadDotSSHPubKeys: false
 provision:
