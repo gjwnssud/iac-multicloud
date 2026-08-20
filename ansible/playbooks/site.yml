@@ -46,3 +46,10 @@
   become: true
   roles:
     - argocd
+
+- name: GitHub Actions self-hosted runner 설치 (선택 사항, --tags github-runner 로 명시할 때만 실행)
+  hosts: "{{ groups['k3s_servers'][0] }}"
+  become: true
+  tags: [github-runner, never]
+  roles:
+    - github-runner

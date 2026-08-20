@@ -1,0 +1,61 @@
+---
+# 사설망(local-mac/local-libvirt)처럼 GitHub 호스팅 러너가 도달할 수 없는 클러스터에서
+# ansible-playbook을 실행하기 위한 self-hosted runner를 컨테이너로 띄운다 (nerdctl, k3s
+# containerd 소켓 재사용). tofu apply(예: local-mac의 limactl VM 생성/삭제)는 이 러너로
+# 대체할 수 없다 - limactl은 macOS 호스트 전용이며 게스트 VM 안에서는 자기 자신을 관리할
+# 수 없으므로 여전히 Mac에서 직접 실행해야 한다.
+#
+# 기본적으로 실행되지 않고 site.yml에서 `--tags github-runner`로 명시할 때만 적용된다.
+
+- name: 필수 변수 확인
+  ansible.builtin.assert:
+    that:
+      - github_runner_repo | length > 0
+      - github_runner_pat | length > 0
+    fail_msg: "github_runner_repo/github_runner_pat 를 -e 또는 ansible-vault로 지정해야 한다"
+
+- name: 러너 데이터 디렉터리 생성 (등록 정보 및 워크스페이스 영속화)
+  ansible.builtin.file:
+    path: "{{ github_runner_data_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: 러너 엔트리포인트 스크립트 배치 (PAT 포함 - 로그 노출 방지)
+  ansible.builtin.template:
+    src: entrypoint.sh.j2
+    dest: "{{ github_runner_data_dir }}/entrypoint.sh"
+    mode: "0700"
+  register: github_runner_entrypoint
+  no_log: true
+
+- name: GitHub Actions 러너 systemd 유닛 배치 (nerdctl, k3s containerd 소켓)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/github-runner.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=GitHub Actions self-hosted runner (nerdctl, k3s containerd)
+      After=k3s.service
+      Requires=k3s.service
+
+      [Service]
+      ExecStartPre=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock rm -f github-runner
+      ExecStart=/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock \
+        run --name github-runner \
+        -v {{ github_runner_data_dir }}:/actions-runner \
+        --entrypoint /actions-runner/entrypoint.sh \
+        {{ github_runner_image }}
+      ExecStop=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock stop github-runner
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  register: github_runner_unit
+
+- name: GitHub Actions 러너 기동
+  ansible.builtin.systemd:
+    name: github-runner
+    daemon_reload: "{{ github_runner_unit.changed }}"
+    enabled: true
+    state: "{{ 'restarted' if (github_runner_unit.changed or github_runner_entrypoint.changed) else 'started' }}"

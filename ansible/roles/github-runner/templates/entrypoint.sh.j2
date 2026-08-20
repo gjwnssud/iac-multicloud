@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+export RUNNER_ALLOW_RUNASROOT=1
+
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
+  curl ca-certificates git jq openssh-client python3-pip unzip sudo >/dev/null
+pip3 install --break-system-packages --quiet ansible >/dev/null
+
+cd /actions-runner
+
+if [ ! -f .runner ]; then
+  if [ ! -f actions-runner.tar.gz ]; then
+    curl -fsSL -o actions-runner.tar.gz \
+      "https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-linux-{{ github_runner_arch }}-{{ github_runner_version }}.tar.gz"
+  fi
+  tar xzf actions-runner.tar.gz
+
+  # 등록 토큰은 1시간 내 만료되므로 매 최초 기동 시 PAT로 새로 발급받는다.
+  REG_TOKEN=$(curl -fsSL -X POST \
+    -H "Authorization: Bearer {{ github_runner_pat }}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/{{ github_runner_repo }}/actions/runners/registration-token" \
+    | jq -r .token)
+
+  ./config.sh --unattended --replace \
+    --url "https://github.com/{{ github_runner_repo }}" \
+    --token "$REG_TOKEN" \
+    --name "{{ github_runner_name }}" \
+    --labels "{{ github_runner_labels }}" \
+    --work _work
+fi
+
+exec ./run.sh
