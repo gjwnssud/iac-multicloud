@@ -92,19 +92,56 @@ flowchart TB
   RUNNER -.불가: limactl 없음.-x TOFU
 ```
 
-**결론.** 이 러너로 `ansible-playbook`(k3s/ArgoCD 재설정, role 변경 반영)은 자동화할 수 있지만,
-`tofu plan/apply`(VM 생성·삭제)는 여전히 Mac에서 사람이 실행해야 한다. 그래서 아직 `deploy.yml`
-매트릭스에는 편입하지 않았다.
+**결론 (local-mac).** 이 러너로 `ansible-playbook`(k3s/ArgoCD 재설정, role 변경 반영)은 자동화할 수
+있지만, `tofu plan/apply`(VM 생성·삭제)는 여전히 Mac에서 사람이 실행해야 한다. `limactl`이 데몬/원격
+프로토콜 없는 순수 로컬 CLI라서 게스트 VM 안에서 호스트를 원격으로 조작할 방법이 없기 때문이다. 그래서
+아직 `deploy.yml` 매트릭스에는 편입하지 않았다.
+
+### local-libvirt는 다르다 — tofu apply까지 컨테이너 안에서
+
+`libvirt`는 `limactl`과 달리 daemon(libvirtd) + 원격 클라이언트 구조로 설계됐다. `libvirt_uri`를
+`qemu+ssh://user@호스트IP/system`으로 주면 게스트 VM 안의 러너 컨테이너가 네트워크로 물리 호스트의
+libvirtd에 접속해 다른 VM을 만들 수 있다 — 즉 **tofu apply부터 ansible-playbook까지 전부** 이 러너
+하나로 처리 가능하다.
+
+```mermaid
+flowchart TB
+  GH["GitHub Actions"]
+
+  subgraph HOST["물리 Linux 호스트 (libvirtd)"]
+    LIBVIRTD["libvirtd\n(qemu:///system)"]
+  end
+
+  subgraph VM["k3s server VM (게스트)"]
+    RUNNER["github-runner 컨테이너\n+ libvirt-clients"]
+    SRV["k3s + ArgoCD"]
+  end
+  AGT["k3s agent VM"]
+
+  GH <-->|"아웃바운드 polling"| RUNNER
+  RUNNER -->|"tofu apply\nqemu+ssh://...(원격, keyfile)"| LIBVIRTD
+  RUNNER -->|"ansible-playbook"| SRV
+  RUNNER -->|"ansible-playbook"| AGT
+  LIBVIRTD -.관리.-> VM
+  LIBVIRTD -.관리.-> AGT
+```
+
+**결론 (local-libvirt).** `github_runner_extra_packages: "libvirt-clients"`
+(`ansible/inventories/local-libvirt/group_vars/all.yml`)로 terraform-provider-libvirt가 필요로 하는
+클라이언트 라이브러리를 러너 컨테이너에 추가 설치하고, `libvirt_uri`를 원격 URI로 override하면 이 환경은
+`deploy.yml` 매트릭스에 그대로 있는 지금 구조(tofu apply + ansible-playbook 한 job)를 그대로 이 러너가
+실행할 수 있다.
 
 ### 지금 상태 — 코드는 있지만 켜져 있지 않음
 
-role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제로 켜려면 세 단계가 필요하다.
+role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제로 켜려면 세 단계가 필요하다
+(local-libvirt는 실제 대상 Linux/libvirtd 호스트가 아직 없어 3번은 보류 중).
 
 | 단계 | 실행 위치 | 명령/작업 |
 |---|---|---|
 | 1. PAT 발급 | GitHub 웹 | repo scope 토큰 생성 |
-| 2. 러너 기동 | Mac 터미널 | `ansible-playbook ... --tags github-runner -e github_runner_repo=... -e github_runner_pat=...` |
-| 3. 등록 확인 | GitHub 웹 | Settings → Actions → Runners에서 `local-mac` 라벨 확인 |
+| 2. 러너 기동 | 대상 호스트 터미널 | `ansible-playbook ... --tags github-runner -e github_runner_repo=... -e github_runner_pat=...` |
+| 3. 등록 확인 | GitHub 웹 | Settings → Actions → Runners에서 `local-mac`/`local` 라벨 확인 |
 
 ## 4. 용어집
 
@@ -117,7 +154,8 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | ArgoCD / GitOps | 클러스터가 git 저장소를 스스로 polling해 상태를 동기화하는 pull 기반 배포 방식. | CI가 클러스터로 push할 필요가 없어 사설망 인바운드 문제가 원천 해소. |
 | OPA / Conftest | tofu plan 결과(JSON)를 정책(rego)으로 검증하는 도구. PR 단계에서 실행. | 잘못된 설정이 apply되기 전에 PR에서 차단. |
 | tfstate backend | OpenTofu가 리소스 상태를 저장하는 원격 저장소(S3+DynamoDB / GCS / Storage Account). | 여러 사람·CI가 동시에 apply해도 상태가 꼬이지 않게 잠금(lock) 제공. |
-| Lima | macOS에서 Linux VM을 가볍게 띄우는 도구(`limactl`). 이 저장소의 local-mac 환경 기반. | Docker Desktop 없이 macOS에서 실제 Linux+k3s 환경을 재현. |
+| Lima | macOS에서 Linux VM을 가볍게 띄우는 도구(`limactl`). 이 저장소의 local-mac 환경 기반. daemon/원격 프로토콜이 없는 순수 로컬 CLI. | Docker Desktop 없이 macOS에서 실제 Linux+k3s 환경을 재현. |
+| libvirt | Linux KVM/QEMU를 다루는 가상화 관리 API. daemon(libvirtd)+원격 클라이언트 구조라 `qemu+ssh://`로 네트워크 너머에서도 VM을 관리 가능. 이 저장소의 local-libvirt 환경 기반. | Lima와 달리 원격 관리가 가능해 러너 컨테이너가 게스트 VM 안에서도 tofu apply를 대신 실행할 수 있음. |
 | containerd / nerdctl | k3s에 내장된 컨테이너 런타임과 그 CLI. registry, github-runner 컨테이너도 이 소켓을 재사용. | Docker를 별도로 설치하지 않고 k3s가 이미 가진 런타임만 사용. |
 | self-hosted runner | GitHub Actions job을 GitHub 서버가 아니라 사용자가 지정한 머신에서 실행시키는 에이전트. | GitHub 호스팅 러너가 도달 못 하는 사설망 안에서 job을 실행하기 위해 필요. |
 | SOPS | git에 커밋해도 안전하게 시크릿을 암호화하는 도구 (로컬 환경 계획). | 클라우드는 네이티브 시크릿 매니저, 로컬은 SOPS로 역할 분담. |
@@ -127,7 +165,8 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | 영역 | 상태 | 비고 |
 |---|---|---|
 | local-mac 인프라 + k3s + ArgoCD | 완료 | end-to-end 수동 검증됨 |
-| github-runner role | 코드만 | 아직 어떤 VM에서도 실행 안 함 |
-| local-mac → deploy.yml 편입 | 보류 | tofu 단계는 계속 Mac에서 수동 |
+| github-runner role (컨테이너 설치 코드) | 코드만 | 아직 어떤 VM에서도 실행 안 함 |
+| local-mac → deploy.yml 편입 | 보류 | tofu 단계는 계속 Mac에서 수동 (limactl 원격 불가) |
+| local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨, 실제 호스트 없어 검증 전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
-| local-libvirt self-hosted runner | 미설치 | 사설망 내부 설치 필요 |
+| local-libvirt 대상 Linux/libvirtd 호스트 | 없음 | 아직 범위 밖 — 확보되면 self-hosted runner 설치·검증 진행 |

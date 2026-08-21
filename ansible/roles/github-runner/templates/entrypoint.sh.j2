@@ -7,7 +7,7 @@ export RUNNER_ALLOW_RUNASROOT=1
 
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-  curl ca-certificates git jq openssh-client python3-pip unzip sudo >/dev/null
+  curl ca-certificates git jq openssh-client python3-pip unzip sudo {{ github_runner_extra_packages }} >/dev/null
 pip3 install --break-system-packages --quiet ansible >/dev/null
 
 cd /actions-runner

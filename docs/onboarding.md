@@ -98,6 +98,44 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 # https://localhost:8080
 ```
 
+## GitHub Actions 시크릿/변수 등록 (인프라 CI 전제조건)
+
+`plan.yml`/`deploy.yml`이 참조하는 시크릿·변수를 아직 등록하지 않으면 aws/gcp/azure job은 자격증명
+단계에서 바로 실패한다. 값 자체는 클라우드 콘솔/CLI에서 직접 발급해서 아래 명령의 `<...>`만 채워
+**로컬 터미널에서 직접** 실행한다 (`gh` CLI, repo 관리자 권한 필요). 값을 다른 곳(채팅 등)에 붙여넣지
+않는다.
+
+```bash
+# secrets
+gh secret set AWS_ACCESS_KEY_ID --body "<...>"
+gh secret set AWS_SECRET_ACCESS_KEY --body "<...>"
+gh secret set GCP_SERVICE_ACCOUNT_KEY < service-account.json
+gh secret set AZURE_CREDENTIALS < azure-credentials.json
+gh secret set SSH_PRIVATE_KEY < ~/.ssh/iac_multicloud_local   # environments/*의 ssh_public_key 짝
+
+# vars
+gh variable set ALLOWED_SSH_CIDRS --body '["<내 공인 IP>/32"]'
+gh variable set SSH_PUBLIC_KEY --body "$(cat ~/.ssh/iac_multicloud_local.pub)"
+gh variable set SSH_USERNAME --body "ubuntu"
+gh variable set AWS_AMI_ID --body "<...>"
+gh variable set GCP_PROJECT_ID --body "<...>"
+gh variable set TF_STATE_BUCKET_AWS --body "<opentofu/bootstrap/aws apply output>"
+gh variable set TF_STATE_LOCK_TABLE_AWS --body "<opentofu/bootstrap/aws apply output>"
+gh variable set TF_STATE_BUCKET_GCP --body "<opentofu/bootstrap/gcp apply output>"
+gh variable set TF_STATE_RG_AZURE --body "<opentofu/bootstrap/azure apply output>"
+gh variable set TF_STATE_ACCOUNT_AZURE --body "<opentofu/bootstrap/azure apply output>"
+```
+
+`TF_STATE_*` 값들은 먼저 `opentofu/bootstrap/{aws,gcp,azure}`를 apply해야 나온다 — 이 부트스트랩은
+실비용이 발생하는 실제 클라우드 리소스 생성이라 위 시크릿 등록과 마찬가지로 사용자가 직접 실행한다.
+
+등록 후 확인:
+
+```bash
+gh secret list
+gh variable list
+```
+
 ## 자주 막히는 지점
 
 - **GCP/Azure 자격증명 없이 `tofu plan`**: provider 인증 단계에서 실패한다. 클라우드 콘솔에서

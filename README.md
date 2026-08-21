@@ -13,9 +13,10 @@ k3s + Helm + ArgoCD(GitOps) 기반으로 애플리케이션 배포를 통일하�
   각자 polling해서 자기 환경에 해당하는 Application만 동기화한다. 중앙에서 클러스터로 push하는
   경로가 없어서 로컬/사설망 인바운드 문제가 원천적으로 없다.
 - **local-mac/local-libvirt CI (선택 사항)**: GitHub 호스팅 러너가 도달할 수 없는 사설망 클러스터는
-  `ansible/roles/github-runner`로 self-hosted runner 컨테이너를 띄워 `ansible-playbook` 단계를
-  자동화할 수 있다. `tofu plan/apply`(VM 생성·삭제)는 여전히 호스트에서 직접 실행해야 한다 —
-  자세한 내용은 [docs/architecture.md](./docs/architecture.md) 참고.
+  `ansible/roles/github-runner`로 self-hosted runner 컨테이너를 게스트 VM 안에 띄운다. local-libvirt는
+  `libvirt`가 원격 클라이언트-서버 프로토콜을 지원해 이 컨테이너가 `tofu apply`까지 대신 실행할 수
+  있지만, local-mac은 `limactl`이 순수 로컬 CLI라 `tofu plan/apply`는 여전히 Mac에서 직접 실행해야
+  한다 — 자세한 내용은 [docs/architecture.md](./docs/architecture.md) 참고.
 
 ```mermaid
 flowchart LR

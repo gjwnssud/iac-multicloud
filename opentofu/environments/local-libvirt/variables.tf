@@ -1,5 +1,12 @@
 variable "libvirt_uri" {
-  description = "libvirt 연결 URI"
+  description = <<-EOT
+    libvirt 연결 URI. 기본값(qemu:///system)은 tofu apply가 libvirtd가 있는 그 머신에서
+    직접 실행될 때만 동작한다. github-runner 컨테이너(사설망 안 게스트 VM)에서 apply하려면
+    물리 호스트로 되돌아가는 원격 URI가 필요하다:
+      qemu+ssh://<host_user>@<하이퍼바이저_LAN_IP>/system?keyfile=/root/.ssh/id_ed25519&no_verify=1
+    keyfile은 deploy.yml의 "SSH 개인키 준비" 단계가 러너 컨테이너 안에 이미 써둔 키를 재사용한다
+    (해당 키가 하이퍼바이저 호스트 계정에도 등록돼 있어야 함).
+  EOT
   type        = string
   default     = "qemu:///system"
 }

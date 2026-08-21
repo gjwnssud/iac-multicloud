@@ -112,25 +112,41 @@ iac-multicloud/
 - **인프라 변경(tofu apply, k3s 부트스트랩)은 여전히 push 기반**: GitHub 호스팅 러너는 로컬 사설망에 도달 불가하므로, 로컬 대상 인프라 작업은 self-hosted runner(로컬 네트워크 내부에 설치) 또는 로컬에서 직접 실행 필요. ArgoCD는 앱 배포 단계에만 적용되며 이 문제를 해결하지 않음
 - ArgoCD sync 방식: 기본 polling(3분 간격) 사용, 즉시 반영이 필요하면 webhook 고려하되 로컬 환경은 인바운드 제약으로 webhook 적용 어려움 — 로컬은 polling 유지 권장
 
-## 8. 진행 상태 및 다음 할 일 (2026-08-08 기준)
+## 8. 진행 상태 및 다음 할 일 (2026-08-21 기준)
 
 Phase 0~7 전체 완료. GitHub 원격 저장소 생성 및 push 완료
 (https://github.com/gjwnssud/iac-multicloud, public).
 
 `local-mac`은 실제로 end-to-end 검증됨(tofu apply → ansible k3s+argocd → 이미지 빌드 →
-helm install → curl 응답 확인). 아래는 아직 안 한 것 — 다음 세션에서 필요할 때 진행:
+helm install → curl 응답 확인). 실제로 `main` push로 Actions를 실행해본 이력(run 32325148355)이
+있는데, aws/gcp/azure는 자격증명 미등록으로 즉시 실패, `local-libvirt`는 매칭되는 self-hosted
+runner가 없어 24시간 대기 후 타임아웃 — 아래 TODO들이 그 원인이다.
+
+**local-mac vs local-libvirt self-hosted runner 설계가 다르다** (자세한 내용은
+[docs/architecture.md](./docs/architecture.md) 3절): `limactl`은 daemon/원격 프로토콜이 없는 순수
+로컬 CLI라 게스트 VM 안 러너 컨테이너가 `tofu apply`를 대신할 수 없다 (ansible만 자동화, tofu는 Mac에서
+수동 유지). 반면 `libvirt`는 daemon+원격 클라이언트 구조라 `libvirt_uri`를 `qemu+ssh://...`로 주면
+게스트 VM 안 러너 컨테이너가 `tofu apply`부터 `ansible-playbook`까지 전부 처리할 수 있다 — 이 방향으로
+`opentofu/environments/local-libvirt/variables.tf`(`libvirt_uri` 원격 URI 설명),
+`terraform.tfvars.example`, `ansible/roles/github-runner`(`github_runner_extra_packages` 변수),
+`ansible/inventories/local-libvirt/group_vars/all.yml`(`libvirt-clients` 설치, 라벨/arch 오버라이드)까지
+코드는 반영해뒀다. **다만 실제 대상 Linux/libvirtd 호스트가 아직 없어 검증 전이다.**
+
+다음 세션에서 필요할 때 진행할 것:
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
-      (`terraform.tfvars.example` 참고)
-- [ ] GitHub 저장소에 Actions 시크릿/변수 등록 (`.github/workflows/plan.yml`,`deploy.yml` 참고)
+      (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
+      걸려 있어 Claude가 자동으로 apply하지 않는다
+- [ ] GitHub 저장소에 Actions 시크릿/변수 등록 (`.github/workflows/plan.yml`,`deploy.yml` 참고).
+      **값 자체는 사용자가 준비/입력** — 채팅에 실제 자격증명을 붙여넣지 않는다
   - secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
     `AZURE_CREDENTIALS`, `SSH_PRIVATE_KEY`
   - vars: `ALLOWED_SSH_CIDRS`, `SSH_PUBLIC_KEY`, `SSH_USERNAME`, `AWS_AMI_ID`, `GCP_PROJECT_ID`,
     `TF_STATE_BUCKET_AWS`, `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`,
     `TF_STATE_ACCOUNT_AZURE`
-- [ ] `local-libvirt` 배포용 self-hosted GitHub Actions runner를 사설망 내부에 설치 (label:
-      `self-hosted`, `local`)
+- [ ] `local-libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. 확보되면
+      `ansible-playbook ... --tags github-runner`로 위 코드를 실제로 검증
 - [ ] 클라우드 3곳(aws/gcp/azure) + `local-libvirt`에 실제 apply/ansible 부트스트랩 → ArgoCD
       기동 확인 (Phase 4/6 완료 기준의 남은 절반)
 - [ ] 위 항목들 완료 후 `argocd/bootstrap/root-{env}.yaml`을 각 클러스터에 1회 적용해 GitOps
