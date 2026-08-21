@@ -12,6 +12,10 @@ k3s + Helm + ArgoCD(GitOps) 기반으로 애플리케이션 배포를 통일하�
 - **앱 배포(GitOps, pull 기반)**: 클러스터마다 독립적으로 설치된 ArgoCD가 이 git 저장소를
   각자 polling해서 자기 환경에 해당하는 Application만 동기화한다. 중앙에서 클러스터로 push하는
   경로가 없어서 로컬/사설망 인바운드 문제가 원천적으로 없다.
+- **local-mac/local-libvirt CI (선택 사항)**: GitHub 호스팅 러너가 도달할 수 없는 사설망 클러스터는
+  `ansible/roles/github-runner`로 self-hosted runner 컨테이너를 띄워 `ansible-playbook` 단계를
+  자동화할 수 있다. `tofu plan/apply`(VM 생성·삭제)는 여전히 호스트에서 직접 실행해야 한다 —
+  자세한 내용은 [docs/architecture.md](./docs/architecture.md) 참고.
 
 ```mermaid
 flowchart LR
@@ -49,7 +53,7 @@ flowchart LR
 | `opentofu/modules/` | provider별 `network`/`compute-*` 모듈. 입출력 변수명 통일(`network_id`/`subnet_id`, `instance_id`/`instance_ip`) |
 | `opentofu/environments/` | `aws`, `gcp`, `azure`, `local-libvirt`(리눅스 호스트), `local-mac`(Lima) |
 | `opentofu/bootstrap/` | 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성 |
-| `ansible/roles/` | `common`(base), `k3s`(server/agent), `argocd`(Helm 설치) |
+| `ansible/roles/` | `common`(base), `k3s`(server/agent), `argocd`(Helm 설치), `registry`(로컬 사설 레지스트리), `github-runner`(self-hosted runner 컨테이너, 선택 사항) |
 | `argocd/apps/` | 환경별 ArgoCD `Application` 매니페스트 (`{app}-{env}.yaml`) |
 | `argocd/bootstrap/` | 클러스터당 1회 적용하는 app-of-apps 루트 (`root-{env}.yaml`) |
 | `apps/` | 앱별 Helm chart. `sample-hello-nestjs`는 파이프라인 검증용 샘플 |
@@ -96,6 +100,7 @@ kubectl apply -f ../argocd/bootstrap/root-<env>.yaml
 
 ## 더 알아보기
 
+- [docs/architecture.md](./docs/architecture.md) — 파이프라인 도식(mermaid), local-mac 호스트/게스트 경계, 용어집
 - [docs/onboarding.md](./docs/onboarding.md) — 신규 기여자 온보딩, 환경별 사전 준비
 - [docs/adding-a-node.md](./docs/adding-a-node.md) — 노드 추가/스케일, 신규 환경 추가
 - [docs/adding-an-app.md](./docs/adding-an-app.md) — 신규 앱 추가 절차
