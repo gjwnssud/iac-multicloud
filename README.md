@@ -102,6 +102,7 @@ kubectl apply -f ../argocd/bootstrap/root-<env>.yaml
 ## 더 알아보기
 
 - [docs/architecture.md](./docs/architecture.md) — 파이프라인 도식(mermaid), local-mac 호스트/게스트 경계, 용어집
+- [docs/tech-stack.md](./docs/tech-stack.md) — 기술 스택 각각의 역할을 초입자 관점에서 설명
 - [docs/onboarding.md](./docs/onboarding.md) — 신규 기여자 온보딩, 환경별 사전 준비
 - [docs/adding-a-node.md](./docs/adding-a-node.md) — 노드 추가/스케일, 신규 환경 추가
 - [docs/adding-an-app.md](./docs/adding-an-app.md) — 신규 앱 추가 절차
