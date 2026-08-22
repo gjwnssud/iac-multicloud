@@ -130,7 +130,20 @@ runner가 없어 24시간 대기 후 타임아웃 — 아래 TODO들이 그 원�
 `opentofu/environments/local-libvirt/variables.tf`(`libvirt_uri` 원격 URI 설명),
 `terraform.tfvars.example`, `ansible/roles/github-runner`(`github_runner_extra_packages` 변수),
 `ansible/inventories/local-libvirt/group_vars/all.yml`(`libvirt-clients` 설치, 라벨/arch 오버라이드)까지
-코드는 반영해뒀다. **다만 실제 대상 Linux/libvirtd 호스트가 아직 없어 검증 전이다.**
+코드는 반영해뒀다.
+
+**실제 Linux/libvirtd 호스트 대신 Lima VM(`iac-multicloud-libvirt-devbox`)으로 시험 apply를 시도함**
+(Apple Silicon이라 KVM 가속 없음, TCG로만 동작). 이 과정에서 실제 버그 2개를 발견해 고쳤고 커밋됨
+(KVM 미지원 호스트에서도, 실제 KVM 호스트에서도 안전한 변경):
+- `libvirt_domain`이 항상 `type="kvm"`으로 고정 → `domain_type` 변수 추가 (기본값 `kvm` 유지, override 가능)
+- `cloudinit` top-level 속성이 항상 IDE bus cdrom으로 붙는데 aarch64 `virt` machine은 IDE 자체를
+  지원 안 함 → 일반 disk + `scsi=true`로 변경 (모든 아키텍처에서 동작)
+
+다만 `tofu apply`가 마지막에 qemu 프로세스의 backing 파일(`*-base.qcow2`) open에서
+`Permission denied`로 막혔다 — DAC 권한, group, apparmor, seccomp_sandbox, mount namespace를
+전부 확인했지만 원인 미해결. root로 직접 같은 파일을 열면 성공하는데 libvirtd가 fork한 qemu에서만
+실패해서, Lima의 Apple Virtualization.framework 기반 중첩 가상화 환경 특유의 문제로 추정된다
+(실제 KVM 지원 리눅스 서버에서는 재현되지 않을 가능성이 높음). 실제 호스트가 생기면 재검증 필요.
 
 다음 세션에서 필요할 때 진행할 것:
 

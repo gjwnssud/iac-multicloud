@@ -28,6 +28,12 @@ variable "vcpu" {
   default     = 2
 }
 
+variable "domain_type" {
+  description = "libvirt 도메인 가상화 타입 (\"kvm\" 또는 \"qemu\"). KVM 가속이 없는 호스트는 \"qemu\"로 override"
+  type        = string
+  default     = "kvm"
+}
+
 variable "server_count" {
   description = "k3s 서버(control-plane) 노드 수"
   type        = number

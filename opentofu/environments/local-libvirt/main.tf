@@ -24,6 +24,7 @@ module "compute" {
   memory_mb      = var.memory_mb
   ssh_username   = var.ssh_username
   ssh_public_key = var.ssh_public_key
+  domain_type    = var.domain_type
 }
 
 resource "local_file" "ansible_inventory" {

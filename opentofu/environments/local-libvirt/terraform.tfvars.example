@@ -5,3 +5,7 @@ ssh_public_key = "ssh-ed25519 AAAA... user@example.com"
 # github-runner 컨테이너(게스트 VM 안)에서 CI로 apply할 때는 물리 호스트로 되돌아가는
 # 원격 URI로 override (variables.tf의 libvirt_uri 설명 참고):
 # libvirt_uri = "qemu+ssh://ubuntu@192.168.1.10/system?keyfile=/root/.ssh/id_ed25519&no_verify=1"
+
+# 호스트에 KVM 하드웨어 가속이 없을 때만 override (예: 중첩 가상화 미지원 환경 위 테스트용 devbox).
+# 실제 베어메탈/일반 KVM 지원 서버에서는 기본값(kvm)을 그대로 쓴다.
+# domain_type = "qemu"

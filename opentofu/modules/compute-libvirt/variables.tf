@@ -47,3 +47,13 @@ variable "pool" {
   type        = string
   default     = "default"
 }
+
+variable "domain_type" {
+  description = <<-EOT
+    libvirt 도메인 가상화 타입 ("kvm" 또는 "qemu"). provider가 항상 kvm으로 XML을 생성하므로
+    하드웨어 가속(KVM)이 없는 호스트(예: 중첩 가상화를 지원하지 않는 Apple Silicon 위 Lima VM)는
+    "qemu"(TCG 소프트웨어 에뮬레이션)로 override해야 domain 생성이 성공한다.
+  EOT
+  type        = string
+  default     = "kvm"
+}

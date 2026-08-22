@@ -167,6 +167,7 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | local-mac 인프라 + k3s + ArgoCD | 완료 | end-to-end 수동 검증됨 |
 | github-runner role (컨테이너 설치 코드) | 코드만 | 아직 어떤 VM에서도 실행 안 함 |
 | local-mac → deploy.yml 편입 | 보류 | tofu 단계는 계속 Mac에서 수동 (limactl 원격 불가) |
-| local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨, 실제 호스트 없어 검증 전 |
+| local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
+| `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
-| local-libvirt 대상 Linux/libvirtd 호스트 | 없음 | 아직 범위 밖 — 확보되면 self-hosted runner 설치·검증 진행 |
+| local-libvirt 대상 Linux/libvirtd 호스트 | Lima devbox로 시험 중 | `iac-multicloud-libvirt-devbox` (Apple Silicon, KVM 미지원) — `tofu apply`가 qemu 프로세스의 backing 파일 open에서 `Permission denied`로 막힘. DAC/그룹/apparmor/seccomp/mount-namespace 전부 확인했지만 미해결 — Lima 중첩 가상화 환경 특유의 문제로 추정되며 **실제 KVM 지원 베어메탈/VM에는 해당 없음**. 실제 호스트 확보 전 추가 조사 보류 |
