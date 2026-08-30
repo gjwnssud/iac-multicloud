@@ -170,4 +170,5 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
 | `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
-| local-libvirt 대상 Linux/libvirtd 호스트 | Lima devbox로 시험 중 | `iac-multicloud-libvirt-devbox` (Apple Silicon, KVM 미지원) — `tofu apply`가 qemu 프로세스의 backing 파일 open에서 `Permission denied`로 막힘. DAC/그룹/apparmor/seccomp/mount-namespace 전부 확인했지만 미해결 — Lima 중첩 가상화 환경 특유의 문제로 추정되며 **실제 KVM 지원 베어메탈/VM에는 해당 없음**. 실제 호스트 확보 전 추가 조사 보류 |
+| local-libvirt 대상 Linux/libvirtd 호스트 | Lima devbox로 시험 완료 (부분) | `iac-multicloud-libvirt-devbox`(Apple Silicon, KVM 미지원)에서 `tofu apply`로 domain 생성·기동까지 성공 확인. 원인은 AppArmor였다(아래 참고) — devbox 전용 설정으로 해결, 코드 변경 없음. 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 극도로 느림(30분+ 부팅 대기해도 IP 미할당) — devbox 자체의 근본적 한계라 이 이상 검증하지 않고 중단. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없음** |
+| devbox에서 발견한 host 설정 이슈 (코드 아님) | 해결됨 | (1) `virt-aa-helper`가 수동 생성한 storage pool의 볼륨을 AppArmor 화이트리스트에 못 넣어 디스크 open이 막힘 → devbox는 `security_driver = "none"`으로 우회. 실제 서버에서도 pool을 CLI로 직접 만들면 재현 가능 (2) `efi-virtio.rom` 누락 → `ipxe-qemu` 패키지 필요 (`--no-install-recommends`로 설치 시 빠짐, 일반 설치라면 문제없음) |

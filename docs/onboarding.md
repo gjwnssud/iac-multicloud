@@ -145,3 +145,10 @@ gh variable list
   버전 제약을 건드리지 않는다.
 - **Ansible이 로컬(제어 노드)에서 sudo 비밀번호를 요구**: `delegate_to: localhost`가 붙은 태스크는
   반드시 `become: false`를 명시해야 한다. play 레벨 `become: true`가 기본적으로 상속되기 때문이다.
+- **local-libvirt에서 `tofu apply` 시 qemu가 디스크 이미지를 `Permission denied`로 못 엶**: DAC
+  권한(소유자/모드)은 멀쩡한데도 발생한다면 AppArmor가 원인일 가능성이 높다. `virsh pool-define-as`로
+  storage pool을 **CLI에서 직접** 만들면(virt-manager를 거치지 않으면), libvirt가 VM마다 자동 생성하는
+  AppArmor 화이트리스트(`/etc/apparmor.d/libvirt/libvirt-<uuid>.files`)에 그 pool의 볼륨 경로가
+  누락된다. `sudo cat /etc/apparmor.d/libvirt/libvirt-<uuid>.files`로 디스크 경로가 빠져 있는지
+  확인하고, 맞다면 `qemu.conf`에 `security_driver = "none"`을 추가하거나 pool을 virt-manager/
+  `virt-install`로 다시 만든다.

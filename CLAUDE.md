@@ -139,11 +139,18 @@ runner가 없어 24시간 대기 후 타임아웃 — 아래 TODO들이 그 원�
 - `cloudinit` top-level 속성이 항상 IDE bus cdrom으로 붙는데 aarch64 `virt` machine은 IDE 자체를
   지원 안 함 → 일반 disk + `scsi=true`로 변경 (모든 아키텍처에서 동작)
 
-다만 `tofu apply`가 마지막에 qemu 프로세스의 backing 파일(`*-base.qcow2`) open에서
-`Permission denied`로 막혔다 — DAC 권한, group, apparmor, seccomp_sandbox, mount namespace를
-전부 확인했지만 원인 미해결. root로 직접 같은 파일을 열면 성공하는데 libvirtd가 fork한 qemu에서만
-실패해서, Lima의 Apple Virtualization.framework 기반 중첩 가상화 환경 특유의 문제로 추정된다
-(실제 KVM 지원 리눅스 서버에서는 재현되지 않을 가능성이 높음). 실제 호스트가 생기면 재검증 필요.
+`tofu apply`가 qemu 프로세스의 backing 파일(`*-base.qcow2`) open에서 `Permission denied`로 막혔던
+문제는 **원인을 찾았다**: AppArmor. `virsh pool-define-as`로 storage pool을 CLI에서 직접 만들면,
+libvirt가 VM마다 자동 생성하는 AppArmor 화이트리스트(`/etc/apparmor.d/libvirt/libvirt-<uuid>.files`)에
+그 pool 볼륨 경로가 누락된다(virt-aa-helper가 pool 기반 볼륨 경로를 못 채움). devbox에서는
+`qemu.conf`에 `security_driver = "none"` 추가로 우회 — **이건 devbox 환경 설정일 뿐 모듈 코드 문제가
+아니라서 코드 변경은 없음** (자세한 내용/재현 조건은 `docs/onboarding.md` "자주 막히는 지점" 참고,
+실제 서버에서도 pool을 CLI로 만들면 동일하게 재현될 수 있음).
+
+이 수정 후 `tofu apply`로 domain 생성·기동까지는 성공했다(`efi-virtio.rom` 누락 문제도 `ipxe-qemu`
+설치로 해결). 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 30분 넘게 기다려도
+DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(Apple Silicon은 중첩 가상화 미지원)라 여기서
+검증을 중단했다. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없을 것으로 예상된다.**
 
 다음 세션에서 필요할 때 진행할 것:
 
