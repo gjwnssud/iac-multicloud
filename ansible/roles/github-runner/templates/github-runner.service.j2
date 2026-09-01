@@ -17,6 +17,7 @@ ExecStart=/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/container
   -v /usr/local/bin/k3s:/usr/local/bin/k3s:ro \
 {% if github_runner_build_tools_enabled %}
   -v /usr/local/bin/nerdctl:/usr/local/bin/nerdctl:ro \
+  -v /usr/local/bin/buildctl:/usr/local/bin/buildctl:ro \
   -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
   -v /run/buildkit/buildkitd.sock:/run/buildkit/buildkitd.sock \
 {% endif %}
