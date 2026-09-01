@@ -1,0 +1,6 @@
+---
+# hosts.ini가 IP를 inventory_hostname으로 쓰기 때문에, github-runner role의 기본값
+# (github_runner_name: "{{ inventory_hostname }}")을 그대로 두면 러너 이름이 "192.168.105.2"처럼
+# 등록돼 알아보기 어렵다.
+github_runner_name: local-mac
+github_runner_labels: "self-hosted,local-mac"
