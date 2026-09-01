@@ -19,6 +19,7 @@ on:
     branches: [main]
     paths:
       - "opentofu/**"
+      - "ansible/**"
 
 permissions:
   contents: read
