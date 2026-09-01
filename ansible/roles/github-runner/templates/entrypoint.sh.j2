@@ -6,8 +6,14 @@ export DEBIAN_FRONTEND=noninteractive
 export RUNNER_ALLOW_RUNASROOT=1
 
 apt-get update -qq
+# libicu74/libssl3/libkrb5-3/zlib1g는 러너(.NET 런타임)가 요구하는 의존성이다. 러너에 내장된
+# bin/installdependencies.sh는 오래된 Ubuntu 버전 패키지명(예: libicu52)만 알아서 24.04(noble)에서
+# 실패하므로 직접 최신 패키지명을 설치한다. github_runner_image를 다른 Ubuntu 버전으로 바꾸면
+# 이 패키지명도 맞춰 바꿔야 할 수 있다.
 apt-get install -y -qq --no-install-recommends \
-  curl ca-certificates git jq openssh-client python3-pip unzip sudo {{ github_runner_extra_packages }} >/dev/null
+  curl ca-certificates git jq openssh-client python3-pip unzip sudo \
+  libicu74 libssl3 libkrb5-3 zlib1g \
+  {{ github_runner_extra_packages }} >/dev/null
 pip3 install --break-system-packages --quiet ansible >/dev/null
 
 cd /actions-runner
@@ -19,10 +25,6 @@ if [ ! -f config.sh ]; then
   fi
   tar xzf actions-runner.tar.gz
 fi
-
-# 러너는 .NET 기반이라 libicu 등 런타임 의존성이 필요하다 (베이스 이미지엔 없음). 러너 바이너리는
-# 영속 볼륨에 남지만 컨테이너 자체는 재시작마다 새로 뜨므로 매번 실행해야 한다.
-./bin/installdependencies.sh
 
 if [ ! -f .runner ]; then
   # 등록 토큰은 1시간 내 만료되므로 매 최초 기동 시 PAT로 새로 발급받는다.
