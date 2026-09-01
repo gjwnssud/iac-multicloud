@@ -112,7 +112,7 @@ iac-multicloud/
 - **인프라 변경(tofu apply, k3s 부트스트랩)은 여전히 push 기반**: GitHub 호스팅 러너는 로컬 사설망에 도달 불가하므로, 로컬 대상 인프라 작업은 self-hosted runner(로컬 네트워크 내부에 설치) 또는 로컬에서 직접 실행 필요. ArgoCD는 앱 배포 단계에만 적용되며 이 문제를 해결하지 않음
 - ArgoCD sync 방식: 기본 polling(3분 간격) 사용, 즉시 반영이 필요하면 webhook 고려하되 로컬 환경은 인바운드 제약으로 webhook 적용 어려움 — 로컬은 polling 유지 권장
 
-## 8. 진행 상태 및 다음 할 일 (2026-08-21 기준)
+## 8. 진행 상태 및 다음 할 일 (2026-09-01 기준)
 
 Phase 0~7 전체 완료. GitHub 원격 저장소 생성 및 push 완료
 (https://github.com/gjwnssud/iac-multicloud, public).
@@ -152,8 +152,18 @@ libvirt가 VM마다 자동 생성하는 AppArmor 화이트리스트(`/etc/apparm
 DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(Apple Silicon은 중첩 가상화 미지원)라 여기서
 검증을 중단했다. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없을 것으로 예상된다.**
 
+**`github-runner` role이 local-mac에서 실제로 검증됐다**: fine-grained PAT(Administration:RW,
+저장소 한정)로 `ansible-playbook --tags github-runner`를 실행해 local-mac server VM 안 컨테이너
+러너가 GitHub에 실제 등록됨(`Connected to GitHub` / `Runner successfully added`, GitHub Runners
+페이지에 `local-mac` 라벨로 표시). 과정에서 실제 버그를 하나 더 고쳤다: `ubuntu:24.04` 베이스 이미지에
+actions-runner(.NET 기반)가 요구하는 `libicu` 등이 없어 계속 crash-loop했는데, 러너에 내장된
+`bin/installdependencies.sh`가 24.04(noble)를 인식 못 하고 오래된 패키지명(`libicu52`)을 시도해서
+실패하던 것 — 최신 패키지명(`libicu74` 등)을 직접 설치하도록 수정, 커밋 완료.
+
 다음 세션에서 필요할 때 진행할 것:
 
+- [ ] `plan.yml`/`deploy.yml`에 `local-mac` 편입 검토 — 러너 자체는 동작 확인됐으니, ansible 단계만
+      이 러너로 자동화하는 매트릭스 분기를 추가할지 결정 (tofu 단계는 여전히 Mac에서 수동)
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
       (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이

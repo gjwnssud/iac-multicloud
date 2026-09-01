@@ -165,8 +165,8 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | 영역 | 상태 | 비고 |
 |---|---|---|
 | local-mac 인프라 + k3s + ArgoCD | 완료 | end-to-end 수동 검증됨 |
-| github-runner role (컨테이너 설치 코드) | 코드만 | 아직 어떤 VM에서도 실행 안 함 |
-| local-mac → deploy.yml 편입 | 보류 | tofu 단계는 계속 Mac에서 수동 (limactl 원격 불가) |
+| github-runner role (컨테이너 설치 코드) | 완료·검증됨 | local-mac server VM에 실제 등록 성공 (`Connected to GitHub` / `Runner successfully added`). GitHub Runners 페이지에 `local-mac` 라벨로 표시됨 |
+| local-mac → deploy.yml/plan.yml 편입 | 보류 | 러너 자체는 동작 확인됨. tofu 단계는 계속 Mac에서 수동(limactl 원격 불가) — ansible 단계만 이 러너로 자동화하는 매트릭스 분기는 아직 워크플로에 반영 안 함 |
 | local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
 | `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
