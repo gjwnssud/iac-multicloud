@@ -1,9 +1,19 @@
 github_runner_repo: "" # 예: gjwnssud/iac-multicloud (필수)
 github_runner_pat: "" # repo scope PAT. 절대 커밋 금지 - ansible-vault로 암호화해 -e로 전달
 github_runner_labels: "self-hosted,{{ inventory_hostname }}"
-github_runner_name: "{{ inventory_hostname }}"
 github_runner_arch: arm64 # Apple Silicon Mac(Lima) 기본값. Intel/리눅스 호스트는 x64로 override
 github_runner_version: "2.337.0"
-github_runner_data_dir: /var/lib/github-runner
+# 레포 하나당 러너 하나가 원칙이라, 같은 호스트에 여러 레포용 러너를 동시에 띄울 수 있도록
+# 컨테이너명/systemd 유닛명/데이터 디렉터리/등록 이름을 이 값으로 구분한다. 기본값은 repo
+# 이름에서 유도되므로 보통 따로 지정할 필요 없다 (같은 repo를 이름만 바꿔 두 벌 띄우고
+# 싶을 때만 override).
+github_runner_instance: "{{ github_runner_repo.split('/')[-1] }}"
+github_runner_name: "{{ inventory_hostname }}-{{ github_runner_instance }}"
+github_runner_data_dir: "/var/lib/github-runner-{{ github_runner_instance }}"
 github_runner_image: "ubuntu:24.04"
 github_runner_extra_packages: "" # 예: local-libvirt는 "libvirt-clients" (원격 qemu+ssh용 클라이언트 라이브러리)
+# true면 이 러너 컨테이너에 nerdctl 바이너리 + buildkit/containerd 소켓을 마운트해서, 앱
+# 레포의 CI가 이 러너에서 직접 컨테이너 이미지를 빌드하고 로컬 레지스트리에 push할 수 있게
+# 한다. k3s 롤이 이미 해당 호스트에 nerdctl-full(+buildkitd)을 설치해뒀다는 전제 — k3s가
+# 안 깔린 호스트(local-libvirt 등)에서는 이 옵션을 켜지 말 것.
+github_runner_build_tools_enabled: false

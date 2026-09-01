@@ -1,9 +1,13 @@
 ---
 # 사설망(local-mac/local-libvirt)처럼 GitHub 호스팅 러너가 도달할 수 없는 클러스터에서
-# ansible-playbook을 실행하기 위한 self-hosted runner를 컨테이너로 띄운다 (nerdctl, k3s
-# containerd 소켓 재사용). tofu apply(예: local-mac의 limactl VM 생성/삭제)는 이 러너로
-# 대체할 수 없다 - limactl은 macOS 호스트 전용이며 게스트 VM 안에서는 자기 자신을 관리할
-# 수 없으므로 여전히 Mac에서 직접 실행해야 한다.
+# ansible-playbook을 실행하거나(기본) 앱 이미지를 빌드/배포하기 위한(build_tools_enabled)
+# self-hosted runner를 컨테이너로 띄운다. tofu apply(예: local-mac의 limactl VM 생성/삭제)는
+# 이 러너로 대체할 수 없다 - limactl은 macOS 호스트 전용이며 게스트 VM 안에서는 자기 자신을
+# 관리할 수 없으므로 여전히 Mac에서 직접 실행해야 한다.
+#
+# 레포 하나당 러너 하나가 원칙이다 - github_runner_repo/instance만 바꿔 이 롤을 여러 번
+# include하면 같은 호스트에 레포별로 독립된 러너를 여러 개 띄울 수 있다 (예: 인프라 변경
+# 감지용 iac-multicloud 러너 + 앱 이미지 빌드용 ott-services 러너를 같은 서버 노드에 공존).
 #
 # 기본적으로 실행되지 않고 site.yml에서 `--tags github-runner`로 명시할 때만 적용된다.
 
@@ -13,6 +17,30 @@
       - github_runner_repo | length > 0
       - github_runner_pat | length > 0
     fail_msg: "github_runner_repo/github_runner_pat 를 -e 또는 ansible-vault로 지정해야 한다"
+
+- name: (마이그레이션) 인스턴스 구분 이전의 고정 이름 러너 정리
+  # instance 개념 도입 전에는 컨테이너/유닛/데이터 디렉터리가 전부 "github-runner"
+  # 고정이었다. 정리 없이 새 이름으로 넘어가면 옛 유닛이 안 지워진 채 같이 남아 러너가
+  # 두 번 등록된다. 매번 시도하되 대상이 없으면(새 호스트) 조용히 넘어간다.
+  block:
+    - name: 레거시 systemd 유닛 중지/비활성화
+      ansible.builtin.systemd:
+        name: github-runner
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: 레거시 유닛 파일 제거
+      ansible.builtin.file:
+        path: /etc/systemd/system/github-runner.service
+        state: absent
+
+    - name: 레거시 컨테이너 제거
+      ansible.builtin.command: >
+        /usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock
+        rm -f github-runner
+      failed_when: false
+      changed_when: false
 
 - name: 러너 데이터 디렉터리 생성 (등록 정보 및 워크스페이스 영속화)
   ansible.builtin.file:
@@ -28,41 +56,16 @@
   register: github_runner_entrypoint
   no_log: true
 
-- name: GitHub Actions 러너 systemd 유닛 배치 (nerdctl, k3s containerd 소켓)
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/github-runner.service
+- name: GitHub Actions 러너 systemd 유닛 배치
+  ansible.builtin.template:
+    src: github-runner.service.j2
+    dest: "/etc/systemd/system/github-runner-{{ github_runner_instance }}.service"
     mode: "0644"
-    content: |
-      [Unit]
-      Description=GitHub Actions self-hosted runner (nerdctl, k3s containerd)
-      After=k3s.service
-      Requires=k3s.service
-
-      [Service]
-      ExecStartPre=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock rm -f github-runner
-      # k3s.yaml/k3s 바이너리를 읽기 전용으로 넣어두면, 이 러너에서 도는 CI job이
-      # `k3s kubectl get nodes`로 클러스터 노드 IP를 조회해 ansible inventory를 그때그때
-      # 동적으로 생성할 수 있다 (하드코딩된 IP에 의존하지 않기 위함). k3s.yaml의 API 서버
-      # 주소가 127.0.0.1이라 컨테이너 자체 네트워크 네임스페이스에서는 연결이 안 되므로
-      # --net host로 호스트 네트워크를 그대로 쓴다.
-      ExecStart=/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock \
-        run --name github-runner --net host \
-        -v {{ github_runner_data_dir }}:/actions-runner \
-        -v /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro \
-        -v /usr/local/bin/k3s:/usr/local/bin/k3s:ro \
-        --entrypoint /actions-runner/entrypoint.sh \
-        {{ github_runner_image }}
-      ExecStop=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock stop github-runner
-      Restart=always
-      RestartSec=10
-
-      [Install]
-      WantedBy=multi-user.target
   register: github_runner_unit
 
 - name: GitHub Actions 러너 기동
   ansible.builtin.systemd:
-    name: github-runner
+    name: "github-runner-{{ github_runner_instance }}"
     daemon_reload: "{{ github_runner_unit.changed }}"
     enabled: true
     state: "{{ 'restarted' if (github_runner_unit.changed or github_runner_entrypoint.changed) else 'started' }}"

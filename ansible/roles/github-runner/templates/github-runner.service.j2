@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+[Unit]
+Description=GitHub Actions self-hosted runner ({{ github_runner_repo }})
+After=k3s.service
+Requires=k3s.service
+
+[Service]
+ExecStartPre=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock rm -f github-runner-{{ github_runner_instance }}
+# k3s.yaml/k3s 바이너리를 읽기 전용으로 넣어두면, 이 러너에서 도는 CI job이
+# `k3s kubectl ...`로 클러스터를 조회/조작할 수 있다 (하드코딩된 IP나 별도 kubectl 설치에
+# 의존하지 않기 위함). k3s.yaml의 API 서버 주소가 127.0.0.1이라 컨테이너 자체 네트워크
+# 네임스페이스에서는 연결이 안 되므로 --net host로 호스트 네트워크를 그대로 쓴다.
+ExecStart=/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock \
+  run --name github-runner-{{ github_runner_instance }} --net host \
+  -v {{ github_runner_data_dir }}:/actions-runner \
+  -v /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro \
+  -v /usr/local/bin/k3s:/usr/local/bin/k3s:ro \
+{% if github_runner_build_tools_enabled %}
+  -v /usr/local/bin/nerdctl:/usr/local/bin/nerdctl:ro \
+  -v /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock \
+  -v /run/buildkit/buildkitd.sock:/run/buildkit/buildkitd.sock \
+{% endif %}
+  --entrypoint /actions-runner/entrypoint.sh \
+  {{ github_runner_image }}
+ExecStop=-/usr/local/bin/nerdctl --namespace k8s.io --address /run/k3s/containerd/containerd.sock stop github-runner-{{ github_runner_instance }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
