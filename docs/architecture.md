@@ -168,9 +168,11 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 |---|---|---|
 | local-mac 인프라 + k3s + ArgoCD | 완료 | end-to-end 수동 검증됨 |
 | github-runner role (컨테이너 설치 코드) | 완료·검증됨 | local-mac server VM에 실제 등록 성공 (`Connected to GitHub` / `Runner successfully added`). GitHub Runners 페이지에 `local-mac` 라벨로 표시됨. `--net host` + k3s.yaml/k3s 바이너리 마운트로 `k3s kubectl` 사용 가능 |
-| local-mac → deploy.yml 편입 | 완료 | ansible 단계만 이 러너가 자동 실행 (tofu는 계속 Mac에서 수동). `hosts.ini`가 커밋 안 되므로 매 실행마다 `k3s kubectl get nodes`로 동적 생성. `plan.yml`은 tofu plan 자체가 Mac 전용이라 편입 안 함 |
+| local-mac → deploy.yml 편입 | 완료·검증됨 | ansible 단계만 이 러너가 자동 실행 (tofu는 계속 Mac에서 수동). `hosts.ini`가 커밋 안 되므로 매 실행마다 `k3s kubectl get nodes`로 동적 생성. `deploy (local-mac)` job이 실제 push로 success 확인됨(run 33501442246). `plan.yml`은 tofu plan 자체가 Mac 전용이라 편입 안 함 |
+| GitHub Actions 시크릿 등록 (SSH_PRIVATE_KEY/SSH_USERNAME) | 완료 | local-mac이 쓰는 키와 동일한 것으로 등록. 클라우드용 시크릿(AWS/GCP/Azure)은 아직 미등록 |
 | local-libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
 | `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
 | local-libvirt 대상 Linux/libvirtd 호스트 | Lima devbox로 시험 완료 (부분) | `iac-multicloud-libvirt-devbox`(Apple Silicon, KVM 미지원)에서 `tofu apply`로 domain 생성·기동까지 성공 확인. 원인은 AppArmor였다(아래 참고) — devbox 전용 설정으로 해결, 코드 변경 없음. 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 극도로 느림(30분+ 부팅 대기해도 IP 미할당) — devbox 자체의 근본적 한계라 이 이상 검증하지 않고 중단. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없음** |
+| `local-libvirt` → deploy.yml 매트릭스 | 임시 제외 | self-hosted runner가 없어 job이 최대 24시간 대기하는데, `deploy.yml`의 `concurrency` 그룹 때문에 같은 ref의 새 push가 전부 그 뒤에 줄서서 막히는 걸 실제로 겪음. 실제 러너가 생기기 전까지 매트릭스에서 빼둠 |
 | devbox에서 발견한 host 설정 이슈 (코드 아님) | 해결됨 | (1) `virt-aa-helper`가 수동 생성한 storage pool의 볼륨을 AppArmor 화이트리스트에 못 넣어 디스크 open이 막힘 → devbox는 `security_driver = "none"`으로 우회. 실제 서버에서도 pool을 CLI로 직접 만들면 재현 가능 (2) `efi-virtio.rom` 누락 → `ipxe-qemu` 패키지 필요 (`--no-install-recommends`로 설치 시 빠짐, 일반 설치라면 문제없음) |

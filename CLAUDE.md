@@ -174,20 +174,20 @@ tofu plan 자체가 Mac 전용이라 편입하지 않음(local-mac 지원 대상
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
       (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
       걸려 있어 Claude가 자동으로 apply하지 않는다
-- [ ] GitHub 저장소에 Actions 시크릿/변수 등록 (`.github/workflows/plan.yml`,`deploy.yml` 참고).
-      **값 자체는 사용자가 준비/입력** — 채팅에 실제 자격증명을 붙여넣지 않는다.
-      **`SSH_PRIVATE_KEY`/`SSH_USERNAME`은 local-mac/local-libvirt에도 필수**(클라우드 전용 아님) —
-      2026-09-01에 `local-mac` job을 실제로 돌려서 확인함: 이 값들이 비어있으면
-      `ansible_user=`(빈 값)로 렌더링되고 `Load key "...": error in libcrypto`로 SSH 접속 자체가
-      실패한다 (`docs/onboarding.md` "GitHub Actions 시크릿/변수 등록" 참고)
-  - secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
-    `AZURE_CREDENTIALS`, `SSH_PRIVATE_KEY`
-  - vars: `ALLOWED_SSH_CIDRS`, `SSH_PUBLIC_KEY`, `SSH_USERNAME`, `AWS_AMI_ID`, `GCP_PROJECT_ID`,
-    `TF_STATE_BUCKET_AWS`, `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`,
-    `TF_STATE_ACCOUNT_AZURE`
-- [ ] `local-libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. 확보되면
-      `ansible-playbook ... --tags github-runner`로 위 코드를 실제로 검증
-- [ ] 클라우드 3곳(aws/gcp/azure) + `local-libvirt`에 실제 apply/ansible 부트스트랩 → ArgoCD
-      기동 확인 (Phase 4/6 완료 기준의 남은 절반)
-- [ ] 위 항목들 완료 후 `argocd/bootstrap/root-{env}.yaml`을 각 클러스터에 1회 적용해 GitOps
-      루프 실제 동작 확인 (`docs/onboarding.md` 참고)
+- [x] GitHub 저장소에 Actions 시크릿/변수 등록 — `SSH_PRIVATE_KEY`(local-mac이 쓰는
+      `~/.ssh/iac_multicloud_local`과 동일 키)/`SSH_USERNAME`("ubuntu") 등록 완료.
+      **`local-mac`의 `deploy.yml` job이 실제로 success로 끝까지 통과함** (run 33501442246,
+      2026-09-01). aws/gcp/azure 자격증명은 아직 미등록 — 클라우드 진행 여부 결정 후 등록
+  - secrets 남은 것: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
+    `AZURE_CREDENTIALS`
+  - vars 남은 것: `ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_BUCKET_AWS`,
+    `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`, `TF_STATE_ACCOUNT_AZURE`
+- [ ] `local-libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. macOS(Lima devbox)로는
+      TCG 소프트웨어 에뮬레이션이라 부팅이 극도로 느려 완전한 검증이 비현실적임을 확인함
+      (docs/architecture.md 5절). 확보되면 (1) `ansible-playbook ... --tags github-runner`로 러너
+      설치·검증 (2) `deploy.yml` matrix에 `local-libvirt`를 다시 추가 (concurrency 그룹 대기
+      문제 때문에 임시로 빼둔 상태, `.github/workflows/deploy.yml` 주석 참고)
+- [ ] 클라우드 3곳(aws/gcp/azure)에 실제 apply/ansible 부트스트랩 → ArgoCD 기동 확인. 현재 보류
+      (사용자가 클라우드 사용을 나중으로 미룸)
+- [ ] 위 항목들 완료 후 각 신규 클러스터에 `argocd/bootstrap/root-{env}.yaml` 1회 적용해 GitOps
+      루프 실제 동작 확인 (`docs/onboarding.md` 참고). local-mac은 이미 예전에 적용·검증됨
