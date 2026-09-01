@@ -175,7 +175,11 @@ tofu plan 자체가 Mac 전용이라 편입하지 않음(local-mac 지원 대상
       (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
       걸려 있어 Claude가 자동으로 apply하지 않는다
 - [ ] GitHub 저장소에 Actions 시크릿/변수 등록 (`.github/workflows/plan.yml`,`deploy.yml` 참고).
-      **값 자체는 사용자가 준비/입력** — 채팅에 실제 자격증명을 붙여넣지 않는다
+      **값 자체는 사용자가 준비/입력** — 채팅에 실제 자격증명을 붙여넣지 않는다.
+      **`SSH_PRIVATE_KEY`/`SSH_USERNAME`은 local-mac/local-libvirt에도 필수**(클라우드 전용 아님) —
+      2026-09-01에 `local-mac` job을 실제로 돌려서 확인함: 이 값들이 비어있으면
+      `ansible_user=`(빈 값)로 렌더링되고 `Load key "...": error in libcrypto`로 SSH 접속 자체가
+      실패한다 (`docs/onboarding.md` "GitHub Actions 시크릿/변수 등록" 참고)
   - secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
     `AZURE_CREDENTIALS`, `SSH_PRIVATE_KEY`
   - vars: `ALLOWED_SSH_CIDRS`, `SSH_PUBLIC_KEY`, `SSH_USERNAME`, `AWS_AMI_ID`, `GCP_PROJECT_ID`,

@@ -105,6 +105,13 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 **로컬 터미널에서 직접** 실행한다 (`gh` CLI, repo 관리자 권한 필요). 값을 다른 곳(채팅 등)에 붙여넣지
 않는다.
 
+**`SSH_PRIVATE_KEY`/`SSH_USERNAME`은 클라우드 전용이 아니다.** `local-mac`/`local-libvirt`의
+ansible 단계(self-hosted runner가 실행)도 이 두 값으로 노드에 SSH 접속하므로, 클라우드를 안 쓰더라도
+로컬 환경 CI를 쓰려면 반드시 등록해야 한다 — 비어있으면 `ansible_user=`(빈 값)로 렌더링되고
+`Load key "...": error in libcrypto`로 접속 자체가 실패한다. 값은 로컬 환경들이 실제로 쓰는
+키(`~/.ssh/iac_multicloud_local`)와 **동일한 것**이어야 한다 (`environments/*`의 `ssh_public_key`
+짝이기 때문).
+
 ```bash
 # secrets
 gh secret set AWS_ACCESS_KEY_ID --body "<...>"
