@@ -160,10 +160,16 @@ actions-runner(.NET 기반)가 요구하는 `libicu` 등이 없어 계속 crash-
 `bin/installdependencies.sh`가 24.04(noble)를 인식 못 하고 오래된 패키지명(`libicu52`)을 시도해서
 실패하던 것 — 최신 패키지명(`libicu74` 등)을 직접 설치하도록 수정, 커밋 완료.
 
+**`local-mac`을 `deploy.yml`에 편입 완료**: ansible 단계(k3s+ArgoCD 재적용)만 이 러너가 자동
+실행하도록 매트릭스에 추가했고(tofu는 여전히 Mac에서 수동), local-mac VM에서 직접 동작 검증까지
+마쳤다. 과정에서 두 가지를 더 고쳤다: (1) `hosts.ini`가 커밋 안 되므로(gitignore) CI가 `k3s kubectl
+get nodes`로 클러스터에서 직접 노드 IP를 조회해 인벤토리를 동적 생성하도록 워크플로 스텝 추가 (2) 이를
+위해 러너 컨테이너에 `k3s.yaml`/`k3s` 바이너리를 읽기 전용 마운트했는데, k3s.yaml의 API 서버 주소가
+127.0.0.1이라 컨테이너 자체 네트워크 네임스페이스에서 연결이 안 돼 `--net host`로 전환. `plan.yml`은
+tofu plan 자체가 Mac 전용이라 편입하지 않음(local-mac 지원 대상 아님).
+
 다음 세션에서 필요할 때 진행할 것:
 
-- [ ] `plan.yml`/`deploy.yml`에 `local-mac` 편입 검토 — 러너 자체는 동작 확인됐으니, ansible 단계만
-      이 러너로 자동화하는 매트릭스 분기를 추가할지 결정 (tofu 단계는 여전히 Mac에서 수동)
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
       (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
