@@ -54,9 +54,9 @@ flowchart LR
 | 경로 | 내용 |
 |---|---|
 | `opentofu/modules/` | provider별 `network`/`compute-*` 모듈. 입출력 변수명 통일(`network_id`/`subnet_id`, `instance_id`/`instance_ip`) |
-| `opentofu/environments/` | `aws`, `gcp`, `azure`, `local-libvirt`(리눅스 호스트), `local-mac`(Lima) |
+| `opentofu/environments/` | `aws`, `gcp`, `azure`, `local-libvirt`(리눅스 호스트), `local-mac`(Lima), `local-proxmox`(Proxmox 홈서버) |
 | `opentofu/bootstrap/` | 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성 |
-| `ansible/roles/` | `common`(base), `k3s`(server/agent), `argocd`(Helm 설치), `registry`(로컬 사설 레지스트리), `github-runner`(self-hosted runner 컨테이너, 선택 사항) |
+| `ansible/roles/` | `common`(base), `k3s`(server/agent), `argocd`(Helm 설치), `registry`(로컬 사설 레지스트리), `github-runner`(self-hosted runner 컨테이너, 선택 사항), `proxmox-template`(Proxmox cloud-init 템플릿 VM 생성) |
 | `argocd/apps/` | 환경별 ArgoCD `Application` 매니페스트 (`{app}-{env}.yaml`) |
 | `argocd/bootstrap/` | 클러스터당 1회 적용하는 app-of-apps 루트 (`root-{env}.yaml`) |
 | `apps/` | 앱별 Helm chart. `sample-hello-nestjs`는 파이프라인 검증용 샘플 |
@@ -74,6 +74,7 @@ flowchart LR
 | AWS/GCP/Azure 자격증명 | 해당 클라우드 환경 작업 시 |
 | [libvirt](https://libvirt.org) + QEMU/KVM | `local-libvirt` (리눅스 호스트 전용) |
 | [Lima](https://lima-vm.io) + [socket_vmnet](https://github.com/lima-vm/socket_vmnet) | `local-mac` (macOS/Apple Silicon 전용) |
+| [Proxmox VE](https://www.proxmox.com/proxmox-virtual-environment) | `local-proxmox` (API 토큰 + cloud-init 템플릿 VM 필요) |
 
 자세한 설치·설정 절차는 [docs/onboarding.md](./docs/onboarding.md) 참고.
 

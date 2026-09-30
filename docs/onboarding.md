@@ -45,6 +45,15 @@ ansible-galaxy collection install -r requirements.yml
      -backend-config="dynamodb_table=<bootstrap output: lock_table_name>"
    ```
 
+### 하이퍼바이저별 베이스 이미지 준비
+
+| 환경 | 준비 방법 |
+|---|---|
+| aws / gcp / azure | 공개 이미지(AMI, image family 등)를 변수로 지정. 별도 준비 불필요 |
+| local-mac (Lima) | 모듈이 URL로 직접 받음. 불필요 |
+| local-libvirt | cloud image qcow2를 호스트에 받아 경로를 tfvars `image`에 지정 (수동) |
+| local-proxmox | `playbooks/proxmox-template.yml`로 cloud-init 템플릿 VM 생성 |
+
 ### local-libvirt (리눅스 호스트 + KVM)
 
 리눅스 머신(베어메탈 또는 VM)에 `libvirt`, `qemu-kvm`이 설치되어 있고 `libvirtd`가 실행 중이어야 한다.
@@ -53,6 +62,19 @@ macOS에는 해당하지 않는다 — KVM은 리눅스 커널 전용 기능이�
 ```bash
 sudo apt install libvirt-daemon-system qemu-kvm   # Debian/Ubuntu 계열 예시
 ```
+
+### local-proxmox (Proxmox VE 홈서버)
+
+`bpg/proxmox` provider로 Proxmox API를 호출해 cloud-init 템플릿 VM을 clone한다. 사전 준비:
+
+1. cloud-init 템플릿 VM을 만든다 (1회성, Proxmox 호스트에 root SSH 접속 필요. 기본 VM ID 9000):
+   ```bash
+   cd ansible && ansible-playbook -i "192.168.0.100," -u root playbooks/proxmox-template.yml
+   ```
+   이미지 URL, VM ID, datastore는 `roles/proxmox-template/defaults/main.yml` 변수로 바꾼다. 이미 있으면 건너뛴다.
+2. Datacenter > Permissions > API Tokens에서 토큰을 발급하고 `export PROXMOX_VE_API_TOKEN='user@realm!id=secret'`로 전달한다.
+3. `opentofu/environments/local-proxmox/terraform.tfvars.example`을 복사해 `template_vmid`, `server_ip_addresses` 등을 채운다.
+   IP는 고정 할당이며 규칙은 CT 110번대, VM 120번대다 (현재 .100 호스트, .110 NPM CT, .120 Steam VM 사용 중). k3s 노드는 VM이므로 .121부터 쓴다.
 
 ### local-mac (macOS/Apple Silicon + Lima)
 

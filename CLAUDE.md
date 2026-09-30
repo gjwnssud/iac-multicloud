@@ -34,13 +34,15 @@ iac-multicloud/
 │   │   ├── compute-azure/      # Azure VM (또는 AKS)
 │   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM (리눅스 호스트 전용)
 │   │   ├── compute-lima/       # 로컬 Lima VM (macOS 호스트 전용, limactl 구동)
+│   │   ├── compute-proxmox/    # Proxmox VM (cloud-init 템플릿 clone, 고정 IP)
 │   │   └── network/            # 공통 인터페이스 (VPC/subnet 추상화)
 │   ├── environments/
 │   │   ├── aws/
 │   │   ├── gcp/
 │   │   ├── azure/
 │   │   ├── local-libvirt/      # 로컬 리눅스 서버/VM 환경
-│   │   └── local-mac/          # 로컬 macOS 환경 (Lima)
+│   │   ├── local-mac/          # 로컬 macOS 환경 (Lima)
+│   │   └── local-proxmox/      # Proxmox 홈서버 (bpg/proxmox, cloud-init 템플릿 clone)
 │   ├── bootstrap/               # 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성
 │   └── templates/
 │       └── inventory.tpl       # tofu output → ansible inventory 자동 생성
@@ -49,6 +51,7 @@ iac-multicloud/
 │   │   └── {env}/hosts.ini     # tofu가 자동 생성
 │   ├── roles/
 │   │   ├── common/             # 공통 base (방화벽, 유저, 타임존 등)
+│   │   ├── proxmox-template/   # Proxmox 호스트에 cloud-init 템플릿 VM 1회 생성 (playbooks/proxmox-template.yml)
 │   │   ├── k3s/                # k3s 설치 + 클러스터 조인 (server/agent)
 │   │   └── argocd/             # ArgoCD 설치 (Helm 기반, 클러스터별 독립 설치)
 │   └── playbooks/
@@ -168,7 +171,17 @@ get nodes`로 클러스터에서 직접 노드 IP를 조회해 인벤토리를 �
 127.0.0.1이라 컨테이너 자체 네트워크 네임스페이스에서 연결이 안 돼 `--net host`로 전환. `plan.yml`은
 tofu plan 자체가 Mac 전용이라 편입하지 않음(local-mac 지원 대상 아님).
 
+**Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `local-proxmox` 환경을
+추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). `tofu validate`까지만 통과했고 실제 apply는
+미검증. 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드(.121)로 시작한다. 이에
+따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
+`local-mac` 등록을 제거했다 — `compute-lima`/`local-mac` 코드는 참고용으로 남겨뒀다.
+
 다음 세션에서 필요할 때 진행할 것:
+
+- [ ] `local-proxmox` 실제 apply: `proxmox-template` 플레이북으로 템플릿 VM 준비(미실행) → API 토큰 발급 → `tofu apply` →
+      `ansible-playbook` → `argocd/bootstrap/root-local-proxmox.yaml` 적용. 이후 `deploy.yml` 매트릭스 편입
+      (하드코딩된 환경별 `if` 분기를 `environments.yaml` 메타데이터 기반으로 정리하는 리팩터링 포함 검토)
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함

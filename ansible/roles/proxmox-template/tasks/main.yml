@@ -1,0 +1,32 @@
+---
+- name: 템플릿 VM 존재 여부 확인
+  ansible.builtin.command: "qm status {{ proxmox_template_vmid }}"
+  register: proxmox_template_status
+  changed_when: false
+  failed_when: false
+
+- name: 템플릿 생성 (이미 있으면 건너뜀)
+  when: proxmox_template_status.rc != 0
+  block:
+    - name: cloud image 다운로드
+      ansible.builtin.get_url:
+        url: "{{ proxmox_template_image_url }}"
+        dest: "{{ proxmox_template_image_dir }}/{{ proxmox_template_image_url | basename }}"
+        mode: "0644"
+
+    # import-from은 PVE 8.0+ 기능이다.
+    - name: VM 생성 + 디스크 import + cloud-init 드라이브 부착
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - >-
+          qm create {{ proxmox_template_vmid }} --name {{ proxmox_template_name }}
+          --memory {{ proxmox_template_memory_mb }} --cores {{ proxmox_template_cores }}
+          --net0 virtio,bridge={{ proxmox_template_bridge }} --scsihw virtio-scsi-pci
+          --ostype l26 --serial0 socket --vga serial0
+        - >-
+          qm set {{ proxmox_template_vmid }}
+          --scsi0 {{ proxmox_template_datastore }}:0,import-from={{ proxmox_template_image_dir }}/{{ proxmox_template_image_url | basename }}
+        - "qm set {{ proxmox_template_vmid }} --ide2 {{ proxmox_template_datastore }}:cloudinit"
+        - "qm set {{ proxmox_template_vmid }} --boot order=scsi0"
+        - "qm template {{ proxmox_template_vmid }}"
+      changed_when: true

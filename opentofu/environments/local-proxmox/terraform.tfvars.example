@@ -1,0 +1,12 @@
+proxmox_endpoint = "https://192.168.0.100:8006/"
+# API 토큰은 tfvars에 넣지 말고 환경변수로 전달 (tfvars는 gitignore되지만 셸 히스토리/파일 유출 방지):
+#   export PROXMOX_VE_API_TOKEN='terraform@pve!iac=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+
+node_name      = "pve"
+template_vmid  = 9000 # Ubuntu 24.04 cloud image로 만든 cloud-init 템플릿 VM ID
+ssh_public_key = "ssh-ed25519 AAAA... user@example.com"
+
+# IP 규칙: CT는 110번대(.110 NPM), VM은 120번대(.120 Steam). k3s 노드는 VM이므로 .121부터
+server_ip_addresses = ["192.168.0.121/24"]
+# agent_ip_addresses  = ["192.168.0.122/24"]
+# gateway             = "192.168.0.1"

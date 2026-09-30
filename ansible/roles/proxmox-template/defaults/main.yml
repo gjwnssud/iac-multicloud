@@ -1,0 +1,9 @@
+---
+proxmox_template_vmid: 9000
+proxmox_template_name: ubuntu-2404-cloudinit
+proxmox_template_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+proxmox_template_image_dir: /var/lib/vz/template/iso
+proxmox_template_datastore: local-lvm
+proxmox_template_bridge: vmbr0
+proxmox_template_cores: 2
+proxmox_template_memory_mb: 2048

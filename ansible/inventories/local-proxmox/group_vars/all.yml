@@ -1,0 +1,8 @@
+---
+# hosts.ini가 IP를 inventory_hostname으로 쓰기 때문에, github-runner role의 기본값을 그대로
+# 두면 러너 이름이 IP로 등록돼 알아보기 어렵다. (러너를 설치할 때만 쓰이는 값)
+github_runner_name: local-proxmox
+github_runner_labels: "self-hosted,local-proxmox"
+
+# role 기본값(arm64)은 Apple Silicon Mac 기준. Proxmox 홈서버는 x86_64.
+github_runner_arch: x64

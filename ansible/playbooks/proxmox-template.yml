@@ -1,0 +1,7 @@
+---
+# Proxmox 호스트에서 1회 실행해 cloud-init 템플릿 VM을 만든다 (local-proxmox의 template_vmid).
+# 실행: ansible-playbook -i "192.168.0.100," -u root playbooks/proxmox-template.yml
+- name: Proxmox cloud-init 템플릿 준비
+  hosts: all
+  roles:
+    - proxmox-template
