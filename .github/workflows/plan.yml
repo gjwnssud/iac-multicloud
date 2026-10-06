@@ -15,10 +15,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [aws, gcp, azure, local-libvirt]
-    # local-libvirt는 사설망 내부에 있는 self-hosted runner에서만 실행 가능
+        environment: [aws, gcp, azure, libvirt]
+    # libvirt는 사설망 내부에 있는 self-hosted runner에서만 실행 가능
     # (계획서 7번 리스크: GitHub 호스팅 러너는 로컬 네트워크에 도달 불가)
-    runs-on: ${{ matrix.environment == 'local-libvirt' && fromJSON('["self-hosted", "local"]') || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.environment == 'libvirt' && fromJSON('["self-hosted", "local"]') || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: opentofu/environments/${{ matrix.environment }}

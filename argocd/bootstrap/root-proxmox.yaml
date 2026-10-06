@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root-local-mac
+  name: root-proxmox
   namespace: argocd
 spec:
   project: default
@@ -10,7 +10,7 @@ spec:
     targetRevision: main
     path: argocd/apps
     directory:
-      include: "*-local-mac.yaml"
+      include: "*-proxmox.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

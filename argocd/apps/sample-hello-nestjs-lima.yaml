@@ -1,20 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root-local-libvirt
+  name: sample-hello-nestjs-lima
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/gjwnssud/iac-multicloud.git
     targetRevision: main
-    path: argocd/apps
-    directory:
-      include: "*-local-libvirt.yaml"
+    path: apps/sample-hello-nestjs/chart
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-lima.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: sample-hello-nestjs
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

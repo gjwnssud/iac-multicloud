@@ -1,7 +1,7 @@
 ---
-# 사설망(local-mac/local-libvirt)처럼 GitHub 호스팅 러너가 도달할 수 없는 클러스터에서
+# 사설망(lima/libvirt)처럼 GitHub 호스팅 러너가 도달할 수 없는 클러스터에서
 # ansible-playbook을 실행하거나(기본) 앱 이미지를 빌드/배포하기 위한(build_tools_enabled)
-# self-hosted runner를 컨테이너로 띄운다. tofu apply(예: local-mac의 limactl VM 생성/삭제)는
+# self-hosted runner를 컨테이너로 띄운다. tofu apply(예: lima의 limactl VM 생성/삭제)는
 # 이 러너로 대체할 수 없다 - limactl은 macOS 호스트 전용이며 게스트 VM 안에서는 자기 자신을
 # 관리할 수 없으므로 여전히 Mac에서 직접 실행해야 한다.
 #

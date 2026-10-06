@@ -40,9 +40,9 @@ iac-multicloud/
 │   │   ├── aws/
 │   │   ├── gcp/
 │   │   ├── azure/
-│   │   ├── local-libvirt/      # 로컬 리눅스 서버/VM 환경
-│   │   ├── local-mac/          # 로컬 macOS 환경 (Lima)
-│   │   └── local-proxmox/      # Proxmox 홈서버 (bpg/proxmox, cloud-init 템플릿 clone)
+│   │   ├── libvirt/      # 로컬 리눅스 서버/VM 환경
+│   │   ├── lima/          # 로컬 macOS 환경 (Lima)
+│   │   └── proxmox/      # Proxmox 홈서버 (bpg/proxmox, cloud-init 템플릿 clone)
 │   ├── bootstrap/               # 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성
 │   └── templates/
 │       └── inventory.tpl       # tofu output → ansible inventory 자동 생성
@@ -111,7 +111,7 @@ iac-multicloud/
 - 시크릿 관리: 초기엔 클라우드 네이티브+SOPS로 시작, 팀/규모 커지면 Vault 도입 검토
 - ~~클라우드 확장 시 EKS/GKE/AKS(관리형) vs VM+k3s(직접 관리) 중 선택 필요~~ → **결정 완료**: VM+k3s
   유지 (비용/재사용 이유). 관리형 K8s가 필요해지면 전환이 아니라 `environments/{cloud}-eks` 같은
-  형태로 **공존** 추가. 로컬은 `local-libvirt`(리눅스 호스트)와 `local-mac`(macOS/Lima)으로 분리
+  형태로 **공존** 추가. 로컬은 `libvirt`(리눅스 호스트)와 `lima`(macOS/Lima)으로 분리
 - **인프라 변경(tofu apply, k3s 부트스트랩)은 여전히 push 기반**: GitHub 호스팅 러너는 로컬 사설망에 도달 불가하므로, 로컬 대상 인프라 작업은 self-hosted runner(로컬 네트워크 내부에 설치) 또는 로컬에서 직접 실행 필요. ArgoCD는 앱 배포 단계에만 적용되며 이 문제를 해결하지 않음
 - ArgoCD sync 방식: 기본 polling(3분 간격) 사용, 즉시 반영이 필요하면 webhook 고려하되 로컬 환경은 인바운드 제약으로 webhook 적용 어려움 — 로컬은 polling 유지 권장
 
@@ -120,19 +120,19 @@ iac-multicloud/
 Phase 0~7 전체 완료. GitHub 원격 저장소 생성 및 push 완료
 (https://github.com/gjwnssud/iac-multicloud, public).
 
-`local-mac`은 실제로 end-to-end 검증됨(tofu apply → ansible k3s+argocd → 이미지 빌드 →
+`lima`은 실제로 end-to-end 검증됨(tofu apply → ansible k3s+argocd → 이미지 빌드 →
 helm install → curl 응답 확인). 실제로 `main` push로 Actions를 실행해본 이력(run 32325148355)이
-있는데, aws/gcp/azure는 자격증명 미등록으로 즉시 실패, `local-libvirt`는 매칭되는 self-hosted
+있는데, aws/gcp/azure는 자격증명 미등록으로 즉시 실패, `libvirt`는 매칭되는 self-hosted
 runner가 없어 24시간 대기 후 타임아웃 — 아래 TODO들이 그 원인이다.
 
-**local-mac vs local-libvirt self-hosted runner 설계가 다르다** (자세한 내용은
+**lima vs libvirt self-hosted runner 설계가 다르다** (자세한 내용은
 [docs/architecture.md](./docs/architecture.md) 3절): `limactl`은 daemon/원격 프로토콜이 없는 순수
 로컬 CLI라 게스트 VM 안 러너 컨테이너가 `tofu apply`를 대신할 수 없다 (ansible만 자동화, tofu는 Mac에서
 수동 유지). 반면 `libvirt`는 daemon+원격 클라이언트 구조라 `libvirt_uri`를 `qemu+ssh://...`로 주면
 게스트 VM 안 러너 컨테이너가 `tofu apply`부터 `ansible-playbook`까지 전부 처리할 수 있다 — 이 방향으로
-`opentofu/environments/local-libvirt/variables.tf`(`libvirt_uri` 원격 URI 설명),
+`opentofu/environments/libvirt/variables.tf`(`libvirt_uri` 원격 URI 설명),
 `terraform.tfvars.example`, `ansible/roles/github-runner`(`github_runner_extra_packages` 변수),
-`ansible/inventories/local-libvirt/group_vars/all.yml`(`libvirt-clients` 설치, 라벨/arch 오버라이드)까지
+`ansible/inventories/libvirt/group_vars/all.yml`(`libvirt-clients` 설치, 라벨/arch 오버라이드)까지
 코드는 반영해뒀다.
 
 **실제 Linux/libvirtd 호스트 대신 Lima VM(`iac-multicloud-libvirt-devbox`)으로 시험 apply를 시도함**
@@ -155,52 +155,52 @@ libvirt가 VM마다 자동 생성하는 AppArmor 화이트리스트(`/etc/apparm
 DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(Apple Silicon은 중첩 가상화 미지원)라 여기서
 검증을 중단했다. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없을 것으로 예상된다.**
 
-**`github-runner` role이 local-mac에서 실제로 검증됐다**: fine-grained PAT(Administration:RW,
-저장소 한정)로 `ansible-playbook --tags github-runner`를 실행해 local-mac server VM 안 컨테이너
+**`github-runner` role이 lima에서 실제로 검증됐다**: fine-grained PAT(Administration:RW,
+저장소 한정)로 `ansible-playbook --tags github-runner`를 실행해 lima server VM 안 컨테이너
 러너가 GitHub에 실제 등록됨(`Connected to GitHub` / `Runner successfully added`, GitHub Runners
-페이지에 `local-mac` 라벨로 표시). 과정에서 실제 버그를 하나 더 고쳤다: `ubuntu:24.04` 베이스 이미지에
+페이지에 `lima` 라벨로 표시). 과정에서 실제 버그를 하나 더 고쳤다: `ubuntu:24.04` 베이스 이미지에
 actions-runner(.NET 기반)가 요구하는 `libicu` 등이 없어 계속 crash-loop했는데, 러너에 내장된
 `bin/installdependencies.sh`가 24.04(noble)를 인식 못 하고 오래된 패키지명(`libicu52`)을 시도해서
 실패하던 것 — 최신 패키지명(`libicu74` 등)을 직접 설치하도록 수정, 커밋 완료.
 
-**`local-mac`을 `deploy.yml`에 편입 완료**: ansible 단계(k3s+ArgoCD 재적용)만 이 러너가 자동
-실행하도록 매트릭스에 추가했고(tofu는 여전히 Mac에서 수동), local-mac VM에서 직접 동작 검증까지
+**`lima`을 `deploy.yml`에 편입 완료**: ansible 단계(k3s+ArgoCD 재적용)만 이 러너가 자동
+실행하도록 매트릭스에 추가했고(tofu는 여전히 Mac에서 수동), lima VM에서 직접 동작 검증까지
 마쳤다. 과정에서 두 가지를 더 고쳤다: (1) `hosts.ini`가 커밋 안 되므로(gitignore) CI가 `k3s kubectl
 get nodes`로 클러스터에서 직접 노드 IP를 조회해 인벤토리를 동적 생성하도록 워크플로 스텝 추가 (2) 이를
 위해 러너 컨테이너에 `k3s.yaml`/`k3s` 바이너리를 읽기 전용 마운트했는데, k3s.yaml의 API 서버 주소가
 127.0.0.1이라 컨테이너 자체 네트워크 네임스페이스에서 연결이 안 돼 `--net host`로 전환. `plan.yml`은
-tofu plan 자체가 Mac 전용이라 편입하지 않음(local-mac 지원 대상 아님).
+tofu plan 자체가 Mac 전용이라 편입하지 않음(lima 지원 대상 아님).
 
-**Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `local-proxmox` 환경을
+**Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
 추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). `tofu validate`까지만 통과했고 실제 apply는
 미검증. 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드(.121)로 시작한다. 이에
 따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
-`local-mac` 등록을 제거했다 — `compute-lima`/`local-mac` 코드는 참고용으로 남겨뒀다.
+`lima` 등록을 제거했다 — `compute-lima`/`lima` 코드는 참고용으로 남겨뒀다.
 
 다음 세션에서 필요할 때 진행할 것:
 
-- [ ] `local-proxmox` 실제 apply: `proxmox-template` 플레이북으로 템플릿 VM 준비(미실행) → API 토큰 발급 → `tofu apply` →
-      `ansible-playbook` → `argocd/bootstrap/root-local-proxmox.yaml` 적용. 이후 `deploy.yml` 매트릭스 편입
+- [ ] `proxmox` 실제 apply: `proxmox-template` 플레이북으로 템플릿 VM 준비(미실행) → API 토큰 발급 → `tofu apply` →
+      `ansible-playbook` → `argocd/bootstrap/root-proxmox.yaml` 적용. 이후 `deploy.yml` 매트릭스 편입
       (하드코딩된 환경별 `if` 분기를 `environments.yaml` 메타데이터 기반으로 정리하는 리팩터링 포함 검토)
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
       (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
       걸려 있어 Claude가 자동으로 apply하지 않는다
-- [x] GitHub 저장소에 Actions 시크릿/변수 등록 — `SSH_PRIVATE_KEY`(local-mac이 쓰는
+- [x] GitHub 저장소에 Actions 시크릿/변수 등록 — `SSH_PRIVATE_KEY`(lima이 쓰는
       `~/.ssh/iac_multicloud_local`과 동일 키)/`SSH_USERNAME`("ubuntu") 등록 완료.
-      **`local-mac`의 `deploy.yml` job이 실제로 success로 끝까지 통과함** (run 33501442246,
+      **`lima`의 `deploy.yml` job이 실제로 success로 끝까지 통과함** (run 33501442246,
       2026-09-01). aws/gcp/azure 자격증명은 아직 미등록 — 클라우드 진행 여부 결정 후 등록
   - secrets 남은 것: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
     `AZURE_CREDENTIALS`
   - vars 남은 것: `ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_BUCKET_AWS`,
     `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`, `TF_STATE_ACCOUNT_AZURE`
-- [ ] `local-libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. macOS(Lima devbox)로는
+- [ ] `libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. macOS(Lima devbox)로는
       TCG 소프트웨어 에뮬레이션이라 부팅이 극도로 느려 완전한 검증이 비현실적임을 확인함
       (docs/architecture.md 5절). 확보되면 (1) `ansible-playbook ... --tags github-runner`로 러너
-      설치·검증 (2) `deploy.yml` matrix에 `local-libvirt`를 다시 추가 (concurrency 그룹 대기
+      설치·검증 (2) `deploy.yml` matrix에 `libvirt`를 다시 추가 (concurrency 그룹 대기
       문제 때문에 임시로 빼둔 상태, `.github/workflows/deploy.yml` 주석 참고)
 - [ ] 클라우드 3곳(aws/gcp/azure)에 실제 apply/ansible 부트스트랩 → ArgoCD 기동 확인. 현재 보류
       (사용자가 클라우드 사용을 나중으로 미룸)
 - [ ] 위 항목들 완료 후 각 신규 클러스터에 `argocd/bootstrap/root-{env}.yaml` 1회 적용해 GitOps
-      루프 실제 동작 확인 (`docs/onboarding.md` 참고). local-mac은 이미 예전에 적용·검증됨
+      루프 실제 동작 확인 (`docs/onboarding.md` 참고). lima은 이미 예전에 적용·검증됨

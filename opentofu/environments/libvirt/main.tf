@@ -28,7 +28,7 @@ module "compute" {
 }
 
 resource "local_file" "ansible_inventory" {
-  filename = "${path.module}/../../../ansible/inventories/local-libvirt/hosts.ini"
+  filename = "${path.module}/../../../ansible/inventories/libvirt/hosts.ini"
   content = templatefile("${path.module}/../../templates/inventory.tpl", {
     server_ips           = local.server_ips
     agent_ips            = local.agent_ips

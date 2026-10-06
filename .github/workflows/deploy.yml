@@ -6,9 +6,9 @@ name: Infra Deploy
 # 사전 준비 (1회):
 #   1) opentofu/bootstrap/{aws,gcp,azure}를 로컬에서 apply해 원격 state 저장소 생성
 #   2) 아래 vars/secrets를 리포지토리(또는 environment)에 등록
-#   3) local-libvirt 배포를 위해 사설망 내부에 self-hosted runner 등록 (label: self-hosted, local)
+#   3) libvirt 배포를 위해 사설망 내부에 self-hosted runner 등록 (label: self-hosted, local)
 #
-# local-mac은 tofu apply를 대신하지 않는다 (limactl이 macOS 호스트 전용이라 게스트 VM 안
+# lima은 tofu apply를 대신하지 않는다 (limactl이 macOS 호스트 전용이라 게스트 VM 안
 # 러너가 자기 자신을 관리할 수 없음, docs/architecture.md 3절 참고) — VM 생성/변경은 계속
 # Mac에서 사람이 tofu apply로 직접 한다. 여기서는 이미 떠 있는 클러스터에 ansible-playbook만
 # 재적용한다. hosts.ini는 커밋되지 않으므로(gitignore) 매 실행마다 `k3s kubectl get nodes`로
@@ -31,14 +31,14 @@ jobs:
   deploy:
     strategy:
       fail-fast: false
-      # local-libvirt는 self-hosted runner(label: self-hosted, local)가 아직 없다. 매트릭스에
+      # libvirt는 self-hosted runner(label: self-hosted, local)가 아직 없다. 매트릭스에
       # 넣어두면 concurrency 그룹(아래) 때문에 이 job이 러너를 기다리며 최대 24시간 대기하는 동안
       # 같은 ref로의 새 push가 전부 그 뒤에 줄서서 막힌다 — 실제 러너가 생기면 다시 추가한다.
       matrix:
-        environment: [aws, gcp, azure, local-mac]
+        environment: [aws, gcp, azure, lima]
     runs-on: >-
-      ${{ matrix.environment == 'local-libvirt' && fromJSON('["self-hosted", "local"]')
-       || matrix.environment == 'local-mac' && fromJSON('["self-hosted", "local-mac"]')
+      ${{ matrix.environment == 'libvirt' && fromJSON('["self-hosted", "local"]')
+       || matrix.environment == 'lima' && fromJSON('["self-hosted", "lima"]')
        || 'ubuntu-latest' }}
     defaults:
       run:
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: opentofu/setup-opentofu@v1
-        if: matrix.environment != 'local-mac'
+        if: matrix.environment != 'lima'
         with:
           tofu_version: "1.12.5"
 
@@ -105,18 +105,18 @@ jobs:
             -backend-config="key=azure.terraform.tfstate"
 
       - name: tofu init (local backend)
-        if: matrix.environment == 'local-libvirt'
+        if: matrix.environment == 'libvirt'
         run: tofu init -input=false
 
       - name: GitHub Actions 러너 공인 IP 조회 (클라우드 환경만)
-        if: matrix.environment != 'local-libvirt' && matrix.environment != 'local-mac'
+        if: matrix.environment != 'libvirt' && matrix.environment != 'lima'
         id: runner_ip
         run: echo "cidr=$(curl -s https://checkip.amazonaws.com)/32" >> "$GITHUB_OUTPUT"
 
       - name: tofu apply
-        if: matrix.environment != 'local-mac'
+        if: matrix.environment != 'lima'
         run: |
-          if [ "${{ matrix.environment }}" != "local-libvirt" ]; then
+          if [ "${{ matrix.environment }}" != "libvirt" ]; then
             EXTRA_SSH_CIDR='["${{ steps.runner_ip.outputs.cidr }}"]'
             MERGED=$(jq -c -s '.[0] + .[1]' <(echo "$TF_VAR_allowed_ssh_cidrs") <(echo "$EXTRA_SSH_CIDR"))
             export TF_VAR_allowed_ssh_cidrs="$MERGED"
@@ -133,13 +133,13 @@ jobs:
         working-directory: ansible
         run: ansible-galaxy collection install -r requirements.yml
 
-      # local-mac은 hosts.ini가 커밋되지 않으므로(tofu apply가 Mac에서 수동 실행되어 생성) 이미
+      # lima은 hosts.ini가 커밋되지 않으므로(tofu apply가 Mac에서 수동 실행되어 생성) 이미
       # 부트스트랩된 클러스터 자체(k3s API)에서 노드 IP를 조회해 매번 새로 만든다.
-      - name: local-mac 인벤토리 동적 생성 (k3s 클러스터에서 노드 IP 조회)
-        if: matrix.environment == 'local-mac'
+      - name: lima 인벤토리 동적 생성 (k3s 클러스터에서 노드 IP 조회)
+        if: matrix.environment == 'lima'
         working-directory: ansible
         run: |
-          mkdir -p inventories/local-mac
+          mkdir -p inventories/lima
           NODES_JSON=$(/usr/local/bin/k3s kubectl get nodes -o json)
           {
             echo "[k3s_servers]"
@@ -151,8 +151,8 @@ jobs:
             echo "[k3s_cluster:children]"
             echo "k3s_servers"
             echo "k3s_agents"
-          } > inventories/local-mac/hosts.ini
-          cat inventories/local-mac/hosts.ini
+          } > inventories/lima/hosts.ini
+          cat inventories/lima/hosts.ini
 
       - name: k3s + ArgoCD 부트스트랩 (Ansible)
         working-directory: ansible

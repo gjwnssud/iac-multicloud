@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sample-hello-nestjs-local-libvirt
+  name: sample-hello-nestjs-proxmox
   namespace: argocd
 spec:
   project: default
@@ -12,7 +12,7 @@ spec:
     helm:
       valueFiles:
         - values.yaml
-        - values-local-libvirt.yaml
+        - values-proxmox.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: sample-hello-nestjs

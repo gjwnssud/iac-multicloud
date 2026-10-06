@@ -1,32 +1,28 @@
 locals {
   nodes = merge(
-    { for i, ip in var.server_ip_addresses : "server-${i}" => { role = "server", ip = ip } },
-    { for i, ip in var.agent_ip_addresses : "agent-${i}" => { role = "agent", ip = ip } }
+    { for i in range(var.server_count) : "server-${i}" => { role = "server" } },
+    { for i in range(var.agent_count) : "agent-${i}" => { role = "agent" } }
   )
   server_ips = [for k, v in local.nodes : module.compute[k].instance_ip if v.role == "server"]
   agent_ips  = [for k, v in local.nodes : module.compute[k].instance_ip if v.role == "agent"]
 }
 
+# Lima는 VM별로 독립된 usermode/shared 네트워크를 스스로 관리해서
+# 다른 환경들의 network 모듈 같은 공유 VPC/방화벽 추상화가 필요 없다.
 module "compute" {
-  source   = "../../modules/compute-proxmox"
+  source   = "../../modules/compute-lima"
   for_each = local.nodes
 
   name           = "${var.name}-${each.key}"
-  node_name      = var.node_name
-  template_vmid  = var.template_vmid
-  datastore_id   = var.datastore_id
-  bridge         = var.bridge
-  ip_address     = each.value.ip
-  gateway        = var.gateway
   vcpu           = var.vcpu
-  memory_mb      = var.memory_mb
-  disk_size_gb   = var.disk_size_gb
+  memory_gib     = var.memory_gib
+  disk_gib       = var.disk_gib
   ssh_username   = var.ssh_username
   ssh_public_key = var.ssh_public_key
 }
 
 resource "local_file" "ansible_inventory" {
-  filename = "${path.module}/../../../ansible/inventories/local-proxmox/hosts.ini"
+  filename = "${path.module}/../../../ansible/inventories/lima/hosts.ini"
   content = templatefile("${path.module}/../../templates/inventory.tpl", {
     server_ips           = local.server_ips
     agent_ips            = local.agent_ips
