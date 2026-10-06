@@ -1,3 +1,5 @@
+# 대상 환경은 리포지토리 변수 CI_ENVIRONMENTS(JSON 배열)로 지정한다. 비어 있으면 plan하지 않는다.
+# 지원: aws, gcp, azure, libvirt (libvirt는 label self-hosted,local 러너 필요, 없으면 job 대기)
 name: OpenTofu Plan
 
 on:
@@ -11,11 +13,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.env.outputs.environments }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: env
+        env:
+          CI_ENVIRONMENTS: ${{ vars.CI_ENVIRONMENTS }}
+        run: .github/scripts/select-environments.sh '["aws","gcp","azure","libvirt"]'
+
   plan:
+    needs: setup
+    if: needs.setup.outputs.environments != '[]'
     strategy:
       fail-fast: false
       matrix:
-        environment: [aws, gcp, azure, libvirt]
+        environment: ${{ fromJSON(needs.setup.outputs.environments) }}
     # libvirt는 사설망 내부에 있는 self-hosted runner에서만 실행 가능
     # (계획서 7번 리스크: GitHub 호스팅 러너는 로컬 네트워크에 도달 불가)
     runs-on: ${{ matrix.environment == 'libvirt' && fromJSON('["self-hosted", "local"]') || 'ubuntu-latest' }}

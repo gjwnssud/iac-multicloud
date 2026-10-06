@@ -163,7 +163,7 @@ actions-runner(.NET 기반)가 요구하는 `libicu` 등이 없어 계속 crash-
 `bin/installdependencies.sh`가 24.04(noble)를 인식 못 하고 오래된 패키지명(`libicu52`)을 시도해서
 실패하던 것 — 최신 패키지명(`libicu74` 등)을 직접 설치하도록 수정, 커밋 완료.
 
-**`lima`을 `deploy.yml`에 편입 완료**: ansible 단계(k3s+ArgoCD 재적용)만 이 러너가 자동
+**`lima`을 `deploy.yml`에 편입 완료** (2026-10-06부터 매트릭스 고정 대신 `CI_ENVIRONMENTS` 변수로 선택, Lima VM/러너는 제거된 상태): ansible 단계(k3s+ArgoCD 재적용)만 이 러너가 자동
 실행하도록 매트릭스에 추가했고(tofu는 여전히 Mac에서 수동), lima VM에서 직접 동작 검증까지
 마쳤다. 과정에서 두 가지를 더 고쳤다: (1) `hosts.ini`가 커밋 안 되므로(gitignore) CI가 `k3s kubectl
 get nodes`로 클러스터에서 직접 노드 IP를 조회해 인벤토리를 동적 생성하도록 워크플로 스텝 추가 (2) 이를
@@ -180,7 +180,7 @@ tofu plan 자체가 Mac 전용이라 편입하지 않음(lima 지원 대상 아�
 다음 세션에서 필요할 때 진행할 것:
 
 - [ ] `proxmox` 실제 apply: `proxmox-template` 플레이북으로 템플릿 VM 준비(미실행) → API 토큰 발급 → `tofu apply` →
-      `ansible-playbook` → `argocd/bootstrap/root-proxmox.yaml` 적용. 이후 `deploy.yml` 매트릭스 편입
+      `ansible-playbook` → `argocd/bootstrap/root-proxmox.yaml` 적용. 이후 CI 편입(`select-environments.sh` 지원 목록 + 환경별 스텝 + `CI_ENVIRONMENTS`)
       (하드코딩된 환경별 `if` 분기를 `environments.yaml` 메타데이터 기반으로 정리하는 리팩터링 포함 검토)
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
@@ -193,13 +193,13 @@ tofu plan 자체가 Mac 전용이라 편입하지 않음(lima 지원 대상 아�
       2026-09-01). aws/gcp/azure 자격증명은 아직 미등록 — 클라우드 진행 여부 결정 후 등록
   - secrets 남은 것: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
     `AZURE_CREDENTIALS`
-  - vars 남은 것: `ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_BUCKET_AWS`,
+  - vars 남은 것: `CI_ENVIRONMENTS`(자동 plan/apply 대상, 미설정이면 CI는 아무 환경도 실행하지 않음), `ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_BUCKET_AWS`,
     `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`, `TF_STATE_ACCOUNT_AZURE`
 - [ ] `libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. macOS(Lima devbox)로는
       TCG 소프트웨어 에뮬레이션이라 부팅이 극도로 느려 완전한 검증이 비현실적임을 확인함
       (docs/architecture.md 5절). 확보되면 (1) `ansible-playbook ... --tags github-runner`로 러너
-      설치·검증 (2) `deploy.yml` matrix에 `libvirt`를 다시 추가 (concurrency 그룹 대기
-      문제 때문에 임시로 빼둔 상태, `.github/workflows/deploy.yml` 주석 참고)
+      설치·검증 (2) 리포지토리 변수 `CI_ENVIRONMENTS`에 `libvirt` 추가 (러너 없이 지정하면
+      concurrency 그룹 대기로 push가 막히므로 러너 준비 후에만)
 - [ ] 클라우드 3곳(aws/gcp/azure)에 실제 apply/ansible 부트스트랩 → ArgoCD 기동 확인. 현재 보류
       (사용자가 클라우드 사용을 나중으로 미룸)
 - [ ] 위 항목들 완료 후 각 신규 클러스터에 `argocd/bootstrap/root-{env}.yaml` 1회 적용해 GitOps

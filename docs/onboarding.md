@@ -143,6 +143,7 @@ gh secret set AZURE_CREDENTIALS < azure-credentials.json
 gh secret set SSH_PRIVATE_KEY < ~/.ssh/iac_multicloud_local   # environments/*의 ssh_public_key 짝
 
 # vars
+gh variable set CI_ENVIRONMENTS --body '["aws","gcp"]'   # 자동 plan/apply할 환경. 비우면 아무것도 실행 안 함
 gh variable set ALLOWED_SSH_CIDRS --body '["<내 공인 IP>/32"]'
 gh variable set SSH_PUBLIC_KEY --body "$(cat ~/.ssh/iac_multicloud_local.pub)"
 gh variable set SSH_USERNAME --body "ubuntu"

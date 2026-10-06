@@ -174,5 +174,5 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 | `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
 | 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
 | libvirt 대상 Linux/libvirtd 호스트 | Lima devbox로 시험 완료 (부분) | `iac-multicloud-libvirt-devbox`(Apple Silicon, KVM 미지원)에서 `tofu apply`로 domain 생성·기동까지 성공 확인. 원인은 AppArmor였다(아래 참고) — devbox 전용 설정으로 해결, 코드 변경 없음. 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 극도로 느림(30분+ 부팅 대기해도 IP 미할당) — devbox 자체의 근본적 한계라 이 이상 검증하지 않고 중단. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없음** |
-| `libvirt` → deploy.yml 매트릭스 | 임시 제외 | self-hosted runner가 없어 job이 최대 24시간 대기하는데, `deploy.yml`의 `concurrency` 그룹 때문에 같은 ref의 새 push가 전부 그 뒤에 줄서서 막히는 걸 실제로 겪음. 실제 러너가 생기기 전까지 매트릭스에서 빼둠 |
+| 자동 배포 대상 환경 | 변수로 지정 | 매트릭스를 코드에 고정하지 않고 리포지토리 변수 `CI_ENVIRONMENTS`(JSON 배열)에 적힌 환경만 실행한다(기본 빈 값 = 실행 없음). self-hosted runner가 없는 환경을 지정하면 job이 최대 24시간 대기하고, `deploy.yml`의 `concurrency` 그룹 때문에 같은 ref의 새 push가 전부 그 뒤에 줄서서 막히는 걸 실제로 겪었으므로 러너가 준비된 환경만 지정한다 |
 | devbox에서 발견한 host 설정 이슈 (코드 아님) | 해결됨 | (1) `virt-aa-helper`가 수동 생성한 storage pool의 볼륨을 AppArmor 화이트리스트에 못 넣어 디스크 open이 막힘 → devbox는 `security_driver = "none"`으로 우회. 실제 서버에서도 pool을 CLI로 직접 만들면 재현 가능 (2) `efi-virtio.rom` 누락 → `ipxe-qemu` 패키지 필요 (`--no-install-recommends`로 설치 시 빠짐, 일반 설치라면 문제없음) |

@@ -9,6 +9,8 @@ k3s + Helm + ArgoCD(GitOps) 기반으로 애플리케이션 배포를 통일하�
 
 - **인프라(CI/CD 대상)**: GitHub Actions가 `opentofu`로 VM/클러스터를 만들고 `ansible`로
   k3s+ArgoCD까지만 부트스트랩한다. 앱 배포는 여기서 트리거하지 않는다.
+  CI가 plan/apply할 환경은 리포지토리 변수 `CI_ENVIRONMENTS`(예: `["aws","gcp"]`)로 지정하며, 미설정이면
+  어떤 환경도 실행하지 않는다.
 - **앱 배포(GitOps, pull 기반)**: 클러스터마다 독립적으로 설치된 ArgoCD가 이 git 저장소를
   각자 polling해서 자기 환경에 해당하는 Application만 동기화한다. 중앙에서 클러스터로 push하는
   경로가 없어서 로컬/사설망 인바운드 문제가 원천적으로 없다.
