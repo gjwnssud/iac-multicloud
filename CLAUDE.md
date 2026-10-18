@@ -163,8 +163,7 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
 
 다음 세션에서 필요할 때 진행할 것:
 
-- [ ] `proxmox`: apply·ansible 완료(위 참고). 남은 것: CI 편입(self-hosted runner 설치 + `select-environments.sh` 지원 목록 + 환경별 스텝 + `CI_ENVIRONMENTS`)
-      (하드코딩된 환경별 `if` 분기를 `environments.yaml` 메타데이터 기반으로 정리하는 리팩터링 포함 검토)
+- [ ] `proxmox`: apply·ansible 완료(위 참고). CI 코드 편입 완료(`.github/environments.json` 메타데이터 기반 매트릭스, proxmox는 ansible 단계만 + 동적 인벤토리). 남은 것: proxmox 노드에 self-hosted runner 설치(PAT는 사용자가 직접) → Idle 확인 후 `CI_ENVIRONMENTS`에 `proxmox` 추가
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함

@@ -1,0 +1,37 @@
+{
+  "aws": {
+    "provider": "aws",
+    "runs_on": ["ubuntu-latest"],
+    "plan": true,
+    "tofu_apply": true,
+    "inventory": "tofu"
+  },
+  "gcp": {
+    "provider": "gcp",
+    "runs_on": ["ubuntu-latest"],
+    "plan": true,
+    "tofu_apply": true,
+    "inventory": "tofu"
+  },
+  "azure": {
+    "provider": "azure",
+    "runs_on": ["ubuntu-latest"],
+    "plan": true,
+    "tofu_apply": true,
+    "inventory": "tofu"
+  },
+  "libvirt": {
+    "provider": "local",
+    "runs_on": ["self-hosted", "local"],
+    "plan": true,
+    "tofu_apply": true,
+    "inventory": "tofu"
+  },
+  "proxmox": {
+    "provider": "local",
+    "runs_on": ["self-hosted", "proxmox"],
+    "plan": false,
+    "tofu_apply": false,
+    "inventory": "dynamic"
+  }
+}

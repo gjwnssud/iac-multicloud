@@ -7,10 +7,16 @@ name: Infra Deploy
 #   1) opentofu/bootstrap/{aws,gcp,azure}를 로컬에서 apply해 원격 state 저장소 생성
 #   2) 아래 vars/secrets를 리포지토리(또는 environment)에 등록
 #   3) 배포할 환경을 리포지토리 변수 CI_ENVIRONMENTS에 JSON 배열로 지정 (예: ["aws","gcp"]).
-#      비어 있으면 아무 환경도 배포하지 않는다. 지원: aws, gcp, azure, libvirt
-#   4) libvirt를 지정하려면 사설망 안에 self-hosted runner가 먼저 있어야 한다
-#      (label self-hosted,local). 러너가 없으면 job이
+#      비어 있으면 아무 환경도 배포하지 않는다. 지원 환경과 환경별 동작(러너 라벨, tofu apply 여부,
+#      인벤토리 방식)은 .github/environments.json에 정의한다 — 새 환경은 거기에 항목만 추가하면 된다.
+#   4) self-hosted runner 환경(libvirt/proxmox 등)을 지정하려면 사설망 안에 러너가 먼저 있어야 한다
+#      (ansible --tags github-runner, 라벨은 environments.json의 runs_on과 일치). 러너가 없으면 job이
 #      최대 24시간 대기하고, concurrency 그룹 때문에 같은 ref의 이후 push가 전부 막힌다.
+#
+# tofu_apply=false 환경(예: proxmox)은 VM 생성/변경(tofu)을 CI가 하지 않고 사람이 직접 한다. 러너가
+# 관리 대상 VM 안에서 돌고 tfstate가 로컬이라 CI에서 apply하면 state를 잃어 VM을 재생성하려 하기 때문이다.
+# 이 경우 이미 떠 있는 클러스터에 ansible-playbook만 재적용하며, hosts.ini는 커밋되지 않으므로
+# (gitignore) inventory=dynamic이면 매 실행마다 `k3s kubectl get nodes`로 노드 IP를 조회해 생성한다.
 #
 on:
   push:
@@ -29,24 +35,22 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      environments: ${{ steps.env.outputs.environments }}
+      matrix: ${{ steps.env.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
       - id: env
         env:
           CI_ENVIRONMENTS: ${{ vars.CI_ENVIRONMENTS }}
-        run: .github/scripts/select-environments.sh '["aws","gcp","azure","libvirt"]'
+        run: .github/scripts/select-environments.sh deploy
 
   deploy:
     needs: setup
-    if: needs.setup.outputs.environments != '[]'
+    if: needs.setup.outputs.matrix != '[]'
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(needs.setup.outputs.environments) }}
-    runs-on: >-
-      ${{ matrix.environment == 'libvirt' && fromJSON('["self-hosted", "local"]')
-       || 'ubuntu-latest' }}
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ fromJSON(matrix.runs_on) }}
     defaults:
       run:
         working-directory: opentofu/environments/${{ matrix.environment }}
@@ -54,17 +58,18 @@ jobs:
       TF_VAR_allowed_ssh_cidrs: ${{ vars.ALLOWED_SSH_CIDRS }}
       TF_VAR_ssh_public_key: ${{ vars.SSH_PUBLIC_KEY }}
       TF_VAR_ssh_username: ${{ vars.SSH_USERNAME }}
-      TF_VAR_image: ${{ matrix.environment == 'aws' && vars.AWS_AMI_ID || '' }}
+      TF_VAR_image: ${{ matrix.provider == 'aws' && vars.AWS_AMI_ID || '' }}
       TF_VAR_project: ${{ vars.GCP_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: opentofu/setup-opentofu@v1
+        if: matrix.tofu_apply
         with:
           tofu_version: "1.12.5"
 
       - name: AWS 자격증명 설정
-        if: matrix.environment == 'aws'
+        if: matrix.provider == 'aws'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -72,13 +77,13 @@ jobs:
           aws-region: ap-northeast-2
 
       - name: GCP 자격증명 설정
-        if: matrix.environment == 'gcp'
+        if: matrix.provider == 'gcp'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Azure 자격증명 설정
-        if: matrix.environment == 'azure'
+        if: matrix.provider == 'azure'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -86,42 +91,43 @@ jobs:
       # 원격 backend 부트스트랩 리소스(opentofu/bootstrap/*)가 아직 없으면
       # 아래 init은 backend 필수 값 누락으로 실패한다 (의도된 안전장치).
       - name: tofu init (AWS backend)
-        if: matrix.environment == 'aws'
+        if: matrix.provider == 'aws'
         run: |
           tofu init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET_AWS }}" \
-            -backend-config="key=aws/terraform.tfstate" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
             -backend-config="region=ap-northeast-2" \
             -backend-config="dynamodb_table=${{ vars.TF_STATE_LOCK_TABLE_AWS }}"
 
       - name: tofu init (GCP backend)
-        if: matrix.environment == 'gcp'
+        if: matrix.provider == 'gcp'
         run: |
           tofu init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET_GCP }}" \
-            -backend-config="prefix=gcp"
+            -backend-config="prefix=${{ matrix.environment }}"
 
       - name: tofu init (Azure backend)
-        if: matrix.environment == 'azure'
+        if: matrix.provider == 'azure'
         run: |
           tofu init -input=false \
             -backend-config="resource_group_name=${{ vars.TF_STATE_RG_AZURE }}" \
             -backend-config="storage_account_name=${{ vars.TF_STATE_ACCOUNT_AZURE }}" \
             -backend-config="container_name=tfstate" \
-            -backend-config="key=azure.terraform.tfstate"
+            -backend-config="key=${{ matrix.environment }}.terraform.tfstate"
 
       - name: tofu init (local backend)
-        if: matrix.environment == 'libvirt'
+        if: matrix.tofu_apply && matrix.provider == 'local'
         run: tofu init -input=false
 
       - name: GitHub Actions 러너 공인 IP 조회 (클라우드 환경만)
-        if: matrix.environment != 'libvirt'
+        if: matrix.tofu_apply && matrix.provider != 'local'
         id: runner_ip
         run: echo "cidr=$(curl -s https://checkip.amazonaws.com)/32" >> "$GITHUB_OUTPUT"
 
       - name: tofu apply
+        if: matrix.tofu_apply
         run: |
-          if [ "${{ matrix.environment }}" != "libvirt" ]; then
+          if [ "${{ matrix.provider }}" != "local" ]; then
             EXTRA_SSH_CIDR='["${{ steps.runner_ip.outputs.cidr }}"]'
             MERGED=$(jq -c -s '.[0] + .[1]' <(echo "$TF_VAR_allowed_ssh_cidrs") <(echo "$EXTRA_SSH_CIDR"))
             export TF_VAR_allowed_ssh_cidrs="$MERGED"
@@ -137,6 +143,25 @@ jobs:
       - name: Ansible 컬렉션 설치
         working-directory: ansible
         run: ansible-galaxy collection install -r requirements.yml
+
+      - name: 인벤토리 동적 생성 (k3s 클러스터에서 노드 IP 조회)
+        if: matrix.inventory == 'dynamic'
+        working-directory: ansible
+        run: |
+          mkdir -p inventories/${{ matrix.environment }}
+          NODES_JSON=$(/usr/local/bin/k3s kubectl get nodes -o json)
+          {
+            echo "[k3s_servers]"
+            echo "$NODES_JSON" | jq -r '.items[] | select(.metadata.labels["node-role.kubernetes.io/control-plane"] != null) | .status.addresses[] | select(.type=="InternalIP") | .address + " ansible_user=${{ vars.SSH_USERNAME }}"'
+            echo ""
+            echo "[k3s_agents]"
+            echo "$NODES_JSON" | jq -r '.items[] | select(.metadata.labels["node-role.kubernetes.io/control-plane"] == null) | .status.addresses[] | select(.type=="InternalIP") | .address + " ansible_user=${{ vars.SSH_USERNAME }}"'
+            echo ""
+            echo "[k3s_cluster:children]"
+            echo "k3s_servers"
+            echo "k3s_agents"
+          } > inventories/${{ matrix.environment }}/hosts.ini
+          cat inventories/${{ matrix.environment }}/hosts.ini
 
       - name: k3s + ArgoCD 부트스트랩 (Ansible)
         working-directory: ansible

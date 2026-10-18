@@ -43,8 +43,10 @@ ansible-playbook -i inventories/<env>/hosts.ini playbooks/site.yml
    기존 모듈과 동일한 output 인터페이스(`network_id`/`subnet_id`, `instance_id`/`instance_ip`)로
    새로 작성해야 한다. 공식 Terraform 프로바이더가 없는 도구는
    `null_resource` + `local-exec`로 CLI를 구동하는 패턴을 참고한다.
-6. CI에서 자동 plan/apply하려면 `.github/scripts/select-environments.sh`를 호출하는 `plan.yml`/`deploy.yml`의
-   `setup` job에 지원 환경으로 추가하고, 환경별 분기 스텝을 작성한 뒤 리포지토리 변수 `CI_ENVIRONMENTS`에 이름을 넣는다
+6. CI에서 자동 plan/apply하려면 `.github/environments.json`에 환경 항목(`provider`, `runs_on`, `plan`,
+   `tofu_apply`, `inventory`)을 추가한 뒤 리포지토리 변수 `CI_ENVIRONMENTS`에 이름을 넣는다. 워크플로(`plan.yml`/
+   `deploy.yml`)는 이 메타데이터로 매트릭스를 만들기 때문에 환경이 기존 provider(aws/gcp/azure/local)를 쓰면
+   워크플로 수정은 필요 없다. 새 클라우드 provider일 때만 자격증명/backend init 스텝을 추가한다
 7. `argocd/apps/`, `argocd/bootstrap/`에 새 환경용 매니페스트 추가
    (자세한 절차는 [adding-an-app.md](./adding-an-app.md) 참고)
 

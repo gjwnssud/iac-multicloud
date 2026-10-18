@@ -38,7 +38,16 @@
 - [ ] **7. k3s + ArgoCD 부트스트랩**: `cd ansible && ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml`
 - [ ] **8. 클러스터 확인**: `ansible/fetched/`의 kubeconfig로 `kubectl get nodes`.
 - [ ] **9. GitOps 루프 시작** (클러스터당 1회): `kubectl apply -f argocd/bootstrap/root-proxmox.yaml` 후 ArgoCD UI에서 Sync 확인.
-- [ ] **10. CI 편입** (선택, 위 단계 검증 후): 사설망이면 그 망 안에 self-hosted runner 설치 → `SSH_PRIVATE_KEY`/`SSH_USERNAME` 시크릿 등록 → 리포지토리 변수 `CI_ENVIRONMENTS`에 환경 추가.
+- [ ] **10. CI 편입** (선택, 위 단계 검증 후):
+  1. `.github/environments.json`에 환경 항목이 있는지 확인한다 (없으면 추가: `provider`, `runs_on`, `plan`, `tofu_apply`, `inventory`).
+     - 사설망 + 로컬 tfstate 사이트는 `tofu_apply: false`, `plan: false`, `inventory: dynamic`(ansible만 CI, tofu는 사람이 실행)을 권장한다. 러너가 관리 대상 VM 안에서 돌아 로컬 state를 잃으면 VM을 재생성하려 하기 때문이다.
+  2. 사설망이면 k3s 서버 노드에 self-hosted runner를 설치한다 (PAT는 채팅/커밋에 남기지 말 것). 라벨은 `runs_on`과 일치해야 한다:
+     ```bash
+     cd ansible && ansible-playbook -i inventories/<env>/hosts.ini playbooks/site.yml --tags github-runner \
+       -e github_runner_repo=<owner>/<repo> -e github_runner_pat=<PAT>
+     ```
+  3. 시크릿 `SSH_PRIVATE_KEY`, 변수 `SSH_USERNAME`을 등록하고, GitHub Settings > Actions > Runners에서 러너가 Idle인지 확인한다.
+  4. **러너가 Idle인 것을 확인한 뒤에** 변수 `CI_ENVIRONMENTS`에 환경을 추가한다 (러너 없이 지정하면 job이 24시간 대기하며 push를 막는다).
 
 ## 클라우드(aws/gcp/azure) 사이트일 때 차이점
 
@@ -52,4 +61,4 @@
 
 | 사이트 | 진행 단계 | 비고 |
 |---|---|---|
-| proxmox (192.168.0.100) | 1~8 완료 (2026-10-18) | 템플릿 9000, VM `.122`(`.121`은 기존 사용 중), k3s v1.36.5 + ArgoCD 기동 확인. 9번(root-proxmox 적용) 이후 남음 |
+| proxmox (192.168.0.100) | 1~9 완료, 10번은 CI 코드 편입 완료·러너 설치 대기 (2026-10-18) | 템플릿 9000, VM `.122`(`.121`은 기존 사용 중), k3s v1.36.5 + ArgoCD 기동 확인. 9번(root-proxmox 적용) 이후 남음 |
