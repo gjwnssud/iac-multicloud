@@ -168,7 +168,7 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
       모두 사용자 직접(PAT/시크릿) 작업이며 상세는 [docs/new-site-checklist.md](./docs/new-site-checklist.md) 10번:
   1. fine-grained PAT 발급(저장소 한정, Administration RW) — 채팅/커밋에 남기지 않는다
   2. `ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml --tags github-runner -e github_runner_repo=gjwnssud/iac-multicloud -e github_runner_pat=<PAT>`
-  3. `gh secret set SSH_PRIVATE_KEY < ~/.ssh/iac_multicloud_local` (`SSH_USERNAME` 변수는 등록됨)
+  3. `SSH_PRIVATE_KEY` 시크릿(2026-09-01 등록)과 `SSH_USERNAME` 변수는 이미 있음 — 키가 `~/.ssh/iac_multicloud_local`과 같은지만 확인
   4. GitHub Settings > Actions > Runners에서 `proxmox` 라벨 러너가 Idle인지 확인
   5. **Idle 확인 후에만** `gh variable set CI_ENVIRONMENTS --body '["proxmox"]'` (러너 없이 지정하면 job이
      24시간 대기하며 push를 막음)
