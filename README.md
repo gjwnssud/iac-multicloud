@@ -110,4 +110,5 @@ kubectl apply -f ../argocd/bootstrap/root-<env>.yaml
 - [docs/tech-stack.md](./docs/tech-stack.md) — 기술 스택 각각의 역할을 초입자 관점에서 설명
 - [docs/onboarding.md](./docs/onboarding.md) — 신규 기여자 온보딩, 환경별 사전 준비
 - [docs/adding-a-node.md](./docs/adding-a-node.md) — 노드 추가/스케일, 신규 환경 추가
+- [docs/new-site-checklist.md](./docs/new-site-checklist.md) — 신규 사이트(하이퍼바이저/클라우드 계정) 추가 체크리스트
 - [docs/adding-an-app.md](./docs/adding-an-app.md) — 신규 앱 추가 절차

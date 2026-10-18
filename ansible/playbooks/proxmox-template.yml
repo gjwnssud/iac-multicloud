@@ -1,7 +1,9 @@
 ---
 # Proxmox 호스트에서 1회 실행해 cloud-init 템플릿 VM을 만든다 (proxmox의 template_vmid).
-# 실행: ansible-playbook -i "192.168.0.100," -u root playbooks/proxmox-template.yml
+# 실행: ansible-playbook -i "192.168.0.100," -u <사용자> --private-key ~/.ssh/iac_multicloud_local playbooks/proxmox-template.yml
+# root가 아닌 사용자는 호스트에서 sudo 가능해야 한다 (qm 명령에 root 권한 필요).
 - name: Proxmox cloud-init 템플릿 준비
   hosts: all
+  become: true
   roles:
     - proxmox-template

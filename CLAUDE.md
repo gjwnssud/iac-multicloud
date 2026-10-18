@@ -172,15 +172,15 @@ get nodes`로 클러스터에서 직접 노드 IP를 조회해 인벤토리를 �
 tofu plan 자체가 Mac 전용이라 편입하지 않음(lima 지원 대상 아님).
 
 **Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
-추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). `tofu validate`까지만 통과했고 실제 apply는
-미검증. 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드(.121)로 시작한다. 이에
+추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). 2026-10-18에 실제 apply와 k3s+ArgoCD 부트스트랩까지 검증 완료
+(템플릿 9000, VM .122 — .121은 기존 사용 중이라 .122 사용, 노드명 `hzn`, datastore `local-lvm`).
+`root-proxmox.yaml` 적용 이후는 미검증. 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에
 따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
 `lima` 등록을 제거했다 — `compute-lima`/`lima` 코드는 참고용으로 남겨뒀다.
 
 다음 세션에서 필요할 때 진행할 것:
 
-- [ ] `proxmox` 실제 apply: `proxmox-template` 플레이북으로 템플릿 VM 준비(미실행) → API 토큰 발급 → `tofu apply` →
-      `ansible-playbook` → `argocd/bootstrap/root-proxmox.yaml` 적용. 이후 CI 편입(`select-environments.sh` 지원 목록 + 환경별 스텝 + `CI_ENVIRONMENTS`)
+- [ ] `proxmox`: apply·ansible 완료(위 참고). 남은 것: `argocd/bootstrap/root-proxmox.yaml` 적용. 이후 CI 편입(`select-environments.sh` 지원 목록 + 환경별 스텝 + `CI_ENVIRONMENTS`)
       (하드코딩된 환경별 `if` 분기를 `environments.yaml` 메타데이터 기반으로 정리하는 리팩터링 포함 검토)
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage

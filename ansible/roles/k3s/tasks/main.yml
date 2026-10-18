@@ -116,7 +116,7 @@
 - name: kubeconfig 서버 주소를 노드 접속 주소로 치환
   ansible.builtin.replace:
     path: "{{ k3s_kubeconfig_fetch_dir }}/{{ inventory_hostname }}-kubeconfig.yaml"
-    regexp: 'https://127\.0\.0\.1:6443'
+    regexp: 'https://(127\.0\.0\.1|localhost):6443'
     replace: "https://{{ ansible_host | default(inventory_hostname) }}:6443"
   delegate_to: localhost
   become: false
