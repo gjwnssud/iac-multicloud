@@ -163,7 +163,19 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
 
 다음 세션에서 필요할 때 진행할 것:
 
-- [ ] `proxmox`: apply·ansible 완료(위 참고). CI 코드 편입 완료(`.github/environments.json` 메타데이터 기반 매트릭스, proxmox는 ansible 단계만 + 동적 인벤토리). 남은 것: proxmox 노드에 self-hosted runner 설치(PAT는 사용자가 직접) → Idle 확인 후 `CI_ENVIRONMENTS`에 `proxmox` 추가
+- [ ] `proxmox` CI 편입 마무리 — 코드는 완료(`.github/environments.json` 메타데이터 기반 매트릭스, proxmox는
+      `tofu_apply:false`/`plan:false`/`inventory:dynamic` = ansible 단계만 CI, tofu는 사람이 실행). 남은 것은
+      모두 사용자 직접(PAT/시크릿) 작업이며 상세는 [docs/new-site-checklist.md](./docs/new-site-checklist.md) 10번:
+  1. fine-grained PAT 발급(저장소 한정, Administration RW) — 채팅/커밋에 남기지 않는다
+  2. `ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml --tags github-runner -e github_runner_repo=gjwnssud/iac-multicloud -e github_runner_pat=<PAT>`
+  3. `gh secret set SSH_PRIVATE_KEY < ~/.ssh/iac_multicloud_local` (`SSH_USERNAME` 변수는 등록됨)
+  4. GitHub Settings > Actions > Runners에서 `proxmox` 라벨 러너가 Idle인지 확인
+  5. **Idle 확인 후에만** `gh variable set CI_ENVIRONMENTS --body '["proxmox"]'` (러너 없이 지정하면 job이
+     24시간 대기하며 push를 막음)
+  6. ansible/** 변경 push로 `deploy (proxmox)` job이 success인지 검증. 주의: k3s 재시작 시 러너가 같이 내려가
+     job이 끊길 수 있음(`Requires=k3s.service`)
+  - 선택: 원격 tfstate backend(MinIO/S3) 도입 시 `tofu_apply`/`plan`을 `true`로 전환
+  - 샘플 앱 이미지는 노드에서 `nerdctl build`로 직접 만든 상태(레지스트리 미푸시) — 노드 재생성 시 재빌드 필요
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
