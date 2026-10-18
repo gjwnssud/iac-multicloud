@@ -4,5 +4,5 @@
 github_runner_name: proxmox
 github_runner_labels: "self-hosted,proxmox"
 
-# role 기본값(arm64)은 Apple Silicon Mac 기준. Proxmox 홈서버는 x86_64.
+# Proxmox 홈서버는 x86_64.
 github_runner_arch: x64

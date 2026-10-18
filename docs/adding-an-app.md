@@ -13,7 +13,6 @@ apps/<app-name>/chart/
 ├── values-gcp.yaml
 ├── values-azure.yaml
 ├── values-libvirt.yaml
-├── values-lima.yaml
 ├── values-proxmox.yaml
 └── templates/
     ├── deployment.yaml
@@ -77,18 +76,18 @@ spec:
 
 `ansible/roles/k3s`가 k3s 설치 시 `nerdctl`(+ `buildkitd`)을 함께 설치하고,
 k3s의 containerd 소켓에 붙도록 `buildkit.service`를 구성해둔다. 별도로 Docker
-Desktop이나 nerdctl을 수동 설치할 필요 없이, `lima`/`libvirt`에
+Desktop이나 nerdctl을 수동 설치할 필요 없이, `proxmox`/`libvirt`에
 k3s가 떠 있는 노드라면 바로 다음이 된다:
 
 ```bash
-# lima(Lima) 예시 - k3s의 containerd 네임스페이스로 바로 빌드
+# proxmox 예시 - k3s의 containerd 네임스페이스로 바로 빌드
 scp -r apps/<app-name> <node>:~/
 ssh <node> "cd <app-name> && sudo nerdctl --namespace k8s.io \
   --address /run/k3s/containerd/containerd.sock build -t <app-name>:latest ."
 
 helm upgrade --install <app-name> apps/<app-name>/chart \
   -f apps/<app-name>/chart/values.yaml \
-  -f apps/<app-name>/chart/values-lima.yaml \
+  -f apps/<app-name>/chart/values-proxmox.yaml \
   --set image.pullPolicy=IfNotPresent \
   -n <app-name> --create-namespace
 ```

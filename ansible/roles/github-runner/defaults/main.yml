@@ -1,7 +1,7 @@
 github_runner_repo: "" # 예: gjwnssud/iac-multicloud (필수)
 github_runner_pat: "" # repo scope PAT. 절대 커밋 금지 - ansible-vault로 암호화해 -e로 전달
 github_runner_labels: "self-hosted,{{ inventory_hostname }}"
-github_runner_arch: arm64 # Apple Silicon Mac(Lima) 기본값. Intel/리눅스 호스트는 x64로 override
+github_runner_arch: x64 # x86_64 호스트 기본값. arm64 호스트는 arm64로 override
 github_runner_version: "2.337.0"
 # 레포 하나당 러너 하나가 원칙이라, 같은 호스트에 여러 레포용 러너를 동시에 띄울 수 있도록
 # 컨테이너명/systemd 유닛명/데이터 디렉터리/등록 이름을 이 값으로 구분한다. 기본값은 repo

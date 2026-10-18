@@ -50,7 +50,6 @@ ansible-galaxy collection install -r requirements.yml
 | 환경 | 준비 방법 |
 |---|---|
 | aws / gcp / azure | 공개 이미지(AMI, image family 등)를 변수로 지정. 별도 준비 불필요 |
-| lima (Lima) | 모듈이 URL로 직접 받음. 불필요 |
 | libvirt | cloud image qcow2를 호스트에 받아 경로를 tfvars `image`에 지정 (수동) |
 | proxmox | `playbooks/proxmox-template.yml`로 cloud-init 템플릿 VM 생성 |
 
@@ -75,24 +74,6 @@ sudo apt install libvirt-daemon-system qemu-kvm   # Debian/Ubuntu 계열 예시
 2. Datacenter > Permissions > API Tokens에서 토큰을 발급하고 `export PROXMOX_VE_API_TOKEN='user@realm!id=secret'`로 전달한다.
 3. `opentofu/environments/proxmox/terraform.tfvars.example`을 복사해 `template_vmid`, `server_ip_addresses` 등을 채운다.
    IP는 고정 할당이며 규칙은 CT 110번대, VM 120번대다 (현재 .100 호스트, .110 NPM CT, .120 Steam VM 사용 중). k3s 노드는 VM이므로 .121부터 쓴다.
-
-### lima (macOS/Apple Silicon + Lima)
-
-```bash
-brew install lima socket_vmnet
-```
-
-`socket_vmnet`은 root 소유의 고정 경로(`/opt/socket_vmnet`)에 있어야 하는 보안 요구사항이 있어
-Homebrew keg 경로를 그대로 쓸 수 없다. **최초 1회**만 아래를 직접 실행한다 (sudo 필요):
-
-```bash
-sudo mkdir -p /opt/socket_vmnet/bin
-sudo cp "$(brew --prefix socket_vmnet)/bin/socket_vmnet" /opt/socket_vmnet/bin/socket_vmnet
-sudo chown -R root:wheel /opt/socket_vmnet
-limactl sudoers | sudo tee /etc/sudoers.d/lima
-```
-
-이후로는 `tofu apply`만으로 Lima VM이 shared 네트워크(실제 라우팅되는 IP)로 뜬다.
 
 ## 최초 apply ~ ArgoCD 확인까지
 
@@ -127,7 +108,7 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 **로컬 터미널에서 직접** 실행한다 (`gh` CLI, repo 관리자 권한 필요). 값을 다른 곳(채팅 등)에 붙여넣지
 않는다.
 
-**`SSH_PRIVATE_KEY`/`SSH_USERNAME`은 클라우드 전용이 아니다.** `lima`/`libvirt`의
+**`SSH_PRIVATE_KEY`/`SSH_USERNAME`은 클라우드 전용이 아니다.** `proxmox`/`libvirt`의
 ansible 단계(self-hosted runner가 실행)도 이 두 값으로 노드에 SSH 접속하므로, 클라우드를 안 쓰더라도
 로컬 환경 CI를 쓰려면 반드시 등록해야 한다 — 비어있으면 `ansible_user=`(빈 값)로 렌더링되고
 `Load key "...": error in libcrypto`로 접속 자체가 실패한다. 값은 로컬 환경들이 실제로 쓰는
@@ -170,7 +151,7 @@ gh variable list
 
 - **GCP/Azure 자격증명 없이 `tofu plan`**: provider 인증 단계에서 실패한다. 클라우드 콘솔에서
   서비스 계정/앱 등록 후 CLI로 로그인하면 해결된다.
-- **lima에서 `Unsupported argument`류 에러**: `dmacvicar/libvirt` provider 버전이 `0.9.x`로
+- **libvirt에서 `Unsupported argument`류 에러**: `dmacvicar/libvirt` provider 버전이 `0.9.x`로
   올라가면 스키마가 완전히 바뀐다. `opentofu/modules/*/libvirt`는 `~> 0.8.3`으로 고정되어 있으니
   버전 제약을 건드리지 않는다.
 - **Ansible이 로컬(제어 노드)에서 sudo 비밀번호를 요구**: `delegate_to: localhost`가 붙은 태스크는
