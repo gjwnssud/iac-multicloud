@@ -4,5 +4,5 @@
 github_runner_name: proxmox
 github_runner_labels: "self-hosted,proxmox"
 
-# Proxmox 홈서버는 x86_64.
+# Proxmox 홈서버는 x86_64. (이 파일 변경은 deploy.yml 트리거 경로(ansible/**)에 해당한다)
 github_runner_arch: x64
