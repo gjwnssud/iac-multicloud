@@ -1,0 +1,60 @@
+name: Build App Images
+
+# apps/<app>/ 의 소스(Dockerfile, src 등)가 바뀌면 build=true 환경의 self-hosted runner에서 이미지를
+# 빌드해 그 노드의 로컬 레지스트리에 push하고, apps/<app>/chart/values-<env>.yaml 의 image.tag 를
+# 커밋으로 갱신한다. 이후 배포는 평소처럼 ArgoCD가 git을 polling해 처리한다 (CI는 클러스터에 접근해 배포하지 않음).
+#
+# 대상 환경은 .github/environments.json 의 "build": true 이면서 리포지토리 변수 CI_ENVIRONMENTS에 있는 환경이다.
+# 러너에 빌드 도구가 마운트돼 있어야 한다 (ansible github_runner_build_tools_enabled: true).
+# chart/ 변경은 트리거에서 제외한다 (태그 갱신 커밋이 다시 이 워크플로를 부르지 않도록).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "!apps/*/chart/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-images-${{ github.ref }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.env.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: env
+        env:
+          CI_ENVIRONMENTS: ${{ vars.CI_ENVIRONMENTS }}
+        run: .github/scripts/select-environments.sh build
+
+  build:
+    needs: setup
+    if: needs.setup.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ fromJSON(matrix.runs_on) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 변경된 앱 이미지 빌드/push + values 갱신
+        run: .github/scripts/build-images.sh "${{ matrix.environment }}" "${{ github.event.before }}" "${{ github.sha }}"
+
+      - name: image.tag 변경 커밋/push
+        run: |
+          git diff --quiet -- apps && { echo "변경 없음"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/*/chart/values-${{ matrix.environment }}.yaml
+          git commit -m "chore: ${{ matrix.environment }} 앱 이미지 태그 갱신 (${GITHUB_SHA::7})"
+          git pull --rebase origin main
+          git push origin HEAD:main

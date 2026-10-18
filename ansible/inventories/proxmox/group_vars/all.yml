@@ -6,3 +6,7 @@ github_runner_labels: "self-hosted,proxmox"
 
 # Proxmox 홈서버는 x86_64. (이 파일 변경은 deploy.yml 트리거 경로(ansible/**)에 해당한다)
 github_runner_arch: x64
+
+# 앱 이미지 빌드 워크플로(build-images.yml)가 이 러너에서 nerdctl/buildkit으로 빌드·push하려면 필요.
+# 바꾼 뒤에는 `--tags github-runner`로 러너를 다시 적용해야 마운트가 반영된다.
+github_runner_build_tools_enabled: true

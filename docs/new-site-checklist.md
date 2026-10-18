@@ -46,6 +46,7 @@
      cd ansible && ansible-playbook -i inventories/<env>/hosts.ini playbooks/site.yml --tags github-runner \
        -e github_runner_repo=<owner>/<repo> -e github_runner_pat=<PAT>
      ```
+  - 앱 이미지 빌드를 CI에서 하려면 환경의 `group_vars`에 `github_runner_build_tools_enabled: true`를 두고 `environments.json`에 `"build": true`를 설정한다 (k3s 롤이 nerdctl/buildkit을 이미 설치한 노드 전제).
   3. 시크릿 `SSH_PRIVATE_KEY`, 변수 `SSH_USERNAME`을 등록하고, GitHub Settings > Actions > Runners에서 러너가 Idle인지 확인한다.
   4. **러너가 Idle인 것을 확인한 뒤에** 변수 `CI_ENVIRONMENTS`에 환경을 추가한다 (러너 없이 지정하면 job이 24시간 대기하며 push를 막는다).
 

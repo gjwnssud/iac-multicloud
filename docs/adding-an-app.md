@@ -68,9 +68,16 @@ spec:
 
 ## 4. 컨테이너 이미지
 
-이 저장소의 CI(`plan.yml`/`deploy.yml`)는 이미지 빌드를 하지 않는다 (인프라 전용).
-앱 저장소의 자체 CI에서 이미지를 빌드해 레지스트리에 푸시하고, `values-<env>.yaml`의
-`image.repository`/`image.tag`가 그 이미지를 가리키도록 하면 된다.
+이 저장소의 인프라 CI(`plan.yml`/`deploy.yml`)는 이미지 빌드를 하지 않는다. 대신 `apps/<app>/`에
+`Dockerfile`이 있으면 `.github/workflows/build-images.yml`이 소스 변경(chart 제외) push 때
+`.github/environments.json`에서 `"build": true`인 환경의 self-hosted runner에서 이미지를 빌드한다.
+
+1. 러너가 nerdctl/buildkit으로 이미지를 빌드해 그 노드의 로컬 레지스트리(`localhost:5000`)에 `<git sha 7자리>` 태그로 push
+2. `apps/<app>/chart/values-<env>.yaml`의 `image.repository`(`<노드IP>:5000/<app>`)/`image.tag`를 갱신해 커밋
+3. ArgoCD가 git을 polling해서 새 태그를 배포 (CI는 클러스터에 접근하지 않음)
+
+조건: 환경에 `values-<env>.yaml`이 있어야 하고, 러너가 `github_runner_build_tools_enabled: true`로
+설치돼 있어야 한다. 앱을 별도 저장소로 분리하는 경우에는 그 저장소 CI에서 같은 방식으로 빌드·push하면 된다.
 
 ## 5. 로컬 클러스터로 실제 확인 (선택)
 

@@ -1,37 +1,54 @@
 {
   "aws": {
     "provider": "aws",
-    "runs_on": ["ubuntu-latest"],
+    "runs_on": [
+      "ubuntu-latest"
+    ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu"
+    "inventory": "tofu",
+    "build": false
   },
   "gcp": {
     "provider": "gcp",
-    "runs_on": ["ubuntu-latest"],
+    "runs_on": [
+      "ubuntu-latest"
+    ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu"
+    "inventory": "tofu",
+    "build": false
   },
   "azure": {
     "provider": "azure",
-    "runs_on": ["ubuntu-latest"],
+    "runs_on": [
+      "ubuntu-latest"
+    ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu"
+    "inventory": "tofu",
+    "build": false
   },
   "libvirt": {
     "provider": "local",
-    "runs_on": ["self-hosted", "local"],
+    "runs_on": [
+      "self-hosted",
+      "local"
+    ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu"
+    "inventory": "tofu",
+    "build": false
   },
   "proxmox": {
     "provider": "local",
-    "runs_on": ["self-hosted", "proxmox"],
+    "runs_on": [
+      "self-hosted",
+      "proxmox"
+    ],
     "plan": false,
     "tofu_apply": false,
-    "inventory": "dynamic"
+    "inventory": "dynamic",
+    "build": true
   }
 }
