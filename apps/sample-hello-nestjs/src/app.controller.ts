@@ -5,7 +5,7 @@ export class AppController {
   @Get()
   getHello(): { message: string; environment: string } {
     return {
-      message: 'Hello from iac-multicloud',
+      message: 'Hello from iac-multicloud (auto-built)',
       environment: process.env.ENVIRONMENT ?? 'unknown',
     };
   }
