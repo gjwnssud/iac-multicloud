@@ -168,9 +168,10 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
       `proxmox`) 설치·등록, `CI_ENVIRONMENTS=["proxmox"]` 설정 후 `ansible/**` push로 `deploy` job success 확인
       (run 39111205711). 주의: k3s 재시작 시 러너가 같이 내려가 job이 끊길 수 있음(`Requires=k3s.service`)
   - 선택: 원격 tfstate backend(MinIO/S3) 도입 시 `tofu_apply`/`plan`을 `true`로 전환
-- [ ] 앱 이미지 빌드 자동화(`build-images.yml`, 2026-10-18 코드 추가) 검증: proxmox group_vars에 `github_runner_build_tools_enabled: true`가 켜졌으므로
-      `--tags github-runner`로 러너를 PAT와 함께 재적용(마운트 반영) → `apps/sample-hello-nestjs/src` 변경 push →
-      빌드·레지스트리 push·values 태그 커밋·ArgoCD 반영 확인. 그 전까지 샘플 앱 이미지는 노드에서 수동 빌드한 `latest`
+- [x] 앱 이미지 빌드 자동화(`build-images.yml`) 검증 완료 (2026-10-20, run 39342489086): `apps/sample-hello-nestjs/src`
+      변경 push → proxmox 러너가 빌드 → 로컬 레지스트리(`<노드IP>:5000`)에 sha 태그 push → `values-proxmox.yaml`
+      태그 커밋 → ArgoCD 배포 → 응답 메시지 변경 확인. 참고: 러너 재적용 직후 첫 job이 구 세션에 걸려 queued로 멈출 수
+      있음(취소 후 재실행으로 해결). 간헐적으로 Mac에서 노드 6443 접속이 `no route to host`가 났으나 곧 복구(네트워크 일시 문제)
 
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
       Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
