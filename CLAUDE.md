@@ -157,7 +157,7 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
 **Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
 추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). 2026-10-18에 실제 apply, k3s+ArgoCD 부트스트랩, `root-proxmox.yaml` 적용 후 샘플 앱 Healthy까지 검증 완료
 (템플릿 9000, VM .122 — .121은 기존 사용 중이라 .122 사용, 노드명 `hzn`, datastore `local-lvm`).
-러너/CI 편입은 미실시. 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에
+러너/CI 편입·이미지 빌드 자동화까지 완료(아래 TODO 참고). 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에
 따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
 `lima` 등록을 제거했고, 2026-10-18에 `compute-lima`/`lima` 환경 코드와 관련 문서·워크플로 분기도 삭제했다.
 

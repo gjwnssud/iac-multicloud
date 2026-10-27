@@ -33,7 +33,7 @@
     ```
   - 부족하면 `tofu apply`가 `403 Permission check failed (<경로>, <권한>)`으로 실패한다. 메시지의 경로/권한에 맞춰 추가한다.
 - [ ] **5. 환경 디렉토리 준비**: 사이트가 하나면 `opentofu/environments/proxmox`를 그대로 쓰고, 둘 이상이면 복사해 이름을 구분한다.
-  `terraform.tfvars.example` → `terraform.tfvars` 복사 후 `proxmox_endpoint`, `node_name`, `template_vmid`, `ssh_public_key`, `server_ip_addresses`, `gateway` 입력.
+  `terraform.tfvars.example` → `terraform.tfvars` 복사 후 `proxmox_endpoint`, `node_name`, `template_vmid`, `ssh_public_key`, `server_ip_addresses`, `gateway` 입력. 다른 장비에서도 VM에 접속해야 하면 `extra_ssh_public_keys = ["ssh-ed25519 ..."]`에 공개키를 추가한다 (Proxmox UI에서 직접 넣으면 tofu와 어긋나므로 tfvars로 관리).
 - [ ] **6. `tofu apply`**: `cd opentofu/environments/proxmox && tofu init && tofu plan && tofu apply`. `hosts.ini`가 자동 생성된다.
 - [ ] **7. k3s + ArgoCD 부트스트랩**: `cd ansible && ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml`
 - [ ] **8. 클러스터 확인**: `ansible/fetched/`의 kubeconfig로 `kubectl get nodes`.

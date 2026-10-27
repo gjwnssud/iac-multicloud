@@ -133,8 +133,8 @@ role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제�
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| proxmox 인프라 + k3s + ArgoCD + GitOps(샘플 앱) | 완료·검증됨 (2026-10-18) | `tofu apply` → `site.yml` → `root-proxmox.yaml` 적용 후 샘플 앱 Healthy 확인. 러너/CI 편입은 미실시 |
-| github-runner role (컨테이너 설치 코드) | 코드 완료 | 이전에 lima에서 등록·동작을 검증했고(이후 lima 제거), proxmox/libvirt에는 아직 설치 안 함 |
+| proxmox 인프라 + k3s + ArgoCD + GitOps(샘플 앱) | 완료·검증됨 (2026-10-18) | `tofu apply` → `site.yml` → `root-proxmox.yaml` 적용 후 샘플 앱 Healthy 확인. 러너 설치·CI deploy·앱 이미지 빌드 자동화까지 검증됨 (2026-10-20) |
+| github-runner role (컨테이너 설치 코드) | 코드 완료 | proxmox에 설치·검증됨(라벨 `proxmox`, 빌드 도구 포함). libvirt에는 아직 설치 안 함 |
 | GitHub Actions 시크릿 등록 (SSH_PRIVATE_KEY/SSH_USERNAME) | 완료 | 클라우드용 시크릿(AWS/GCP/Azure)은 아직 미등록 |
 | libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
 | `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
