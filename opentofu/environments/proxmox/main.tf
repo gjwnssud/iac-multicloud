@@ -11,18 +11,19 @@ module "compute" {
   source   = "../../modules/compute-proxmox"
   for_each = local.nodes
 
-  name           = "${var.name}-${each.key}"
-  node_name      = var.node_name
-  template_vmid  = var.template_vmid
-  datastore_id   = var.datastore_id
-  bridge         = var.bridge
-  ip_address     = each.value.ip
-  gateway        = var.gateway
-  vcpu           = var.vcpu
-  memory_mb      = var.memory_mb
-  disk_size_gb   = var.disk_size_gb
-  ssh_username   = var.ssh_username
-  ssh_public_key = var.ssh_public_key
+  name                  = "${var.name}-${each.key}"
+  node_name             = var.node_name
+  template_vmid         = var.template_vmid
+  datastore_id          = var.datastore_id
+  bridge                = var.bridge
+  ip_address            = each.value.ip
+  gateway               = var.gateway
+  vcpu                  = var.vcpu
+  memory_mb             = var.memory_mb
+  disk_size_gb          = var.disk_size_gb
+  ssh_username          = var.ssh_username
+  ssh_public_key        = var.ssh_public_key
+  extra_ssh_public_keys = var.extra_ssh_public_keys
 }
 
 resource "local_file" "ansible_inventory" {

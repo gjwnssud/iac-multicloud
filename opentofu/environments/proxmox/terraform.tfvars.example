@@ -5,6 +5,8 @@ proxmox_endpoint = "https://192.168.0.100:8006/"
 node_name      = "pve"
 template_vmid  = 9000 # Ubuntu 24.04 cloud image로 만든 cloud-init 템플릿 VM ID
 ssh_public_key = "ssh-ed25519 AAAA... user@example.com"
+# 다른 장비에서도 접속하려면 여기에 추가 (Proxmox UI에서 직접 넣으면 tofu가 덮어쓴다)
+# extra_ssh_public_keys = ["ssh-ed25519 AAAA... other-device"]
 
 # IP 규칙: CT는 110번대(.110 NPM), VM은 120번대(.120 Steam). k3s 노드는 VM이므로 .121부터
 server_ip_addresses = ["192.168.0.121/24"]

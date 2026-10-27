@@ -59,6 +59,12 @@ variable "ssh_username" {
   default     = "ubuntu"
 }
 
+variable "extra_ssh_public_keys" {
+  description = "ssh_public_key 외에 cloud-init에 추가로 등록할 SSH 공개키 목록 (다른 장비에서 접속할 때). Proxmox UI에서 직접 넣으면 tofu 값으로 덮어써지므로 여기에 넣는다"
+  type        = list(string)
+  default     = []
+}
+
 variable "ssh_public_key" {
   description = "cloud-init에 등록할 SSH 공개키 (OpenSSH 형식)"
   type        = string

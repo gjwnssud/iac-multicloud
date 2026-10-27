@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_vm" "this" {
 
     user_account {
       username = var.ssh_username
-      keys     = [var.ssh_public_key]
+      keys     = concat([var.ssh_public_key], var.extra_ssh_public_keys)
     }
   }
 }

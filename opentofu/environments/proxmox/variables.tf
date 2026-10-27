@@ -87,6 +87,12 @@ variable "ssh_username" {
   default     = "ubuntu"
 }
 
+variable "extra_ssh_public_keys" {
+  description = "ssh_public_key 외에 cloud-init에 추가 등록할 SSH 공개키 목록 (다른 장비 접속용)"
+  type        = list(string)
+  default     = []
+}
+
 variable "ssh_public_key" {
   description = "cloud-init에 등록할 SSH 공개키"
   type        = string
