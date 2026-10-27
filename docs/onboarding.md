@@ -163,11 +163,11 @@ gh variable list
   누락된다. `sudo cat /etc/apparmor.d/libvirt/libvirt-<uuid>.files`로 디스크 경로가 빠져 있는지
   확인하고, 맞다면 `qemu.conf`에 `security_driver = "none"`을 추가하거나 pool을 virt-manager/
   `virt-install`로 다시 만든다.
-- **Proxmox cloud-init에 다른 장비의 공개키를 UI로 넣었더니 SSH가 안 됨 / `REMOTE HOST IDENTIFICATION HAS
-  CHANGED`**: Proxmox UI의 cloud-init "SSH public key" 항목은 기존 키에 **추가가 아니라 교체**다. 설정을 바꾸면
-  instance-id가 바뀌어 다음 부팅 때 cloud-init이 다시 실행되고, 호스트 키가 재생성(경고의 원인)되며
-  `authorized_keys`에는 새로 넣은 키만 남는다 — 기존 키(ansible/CI 러너가 쓰는 키)로는 접속할 수 없게 된다.
-  또 tofu가 관리하는 값이라 UI 변경은 다음 `tofu apply`에서 되돌려진다. 키를 더하려면 tfvars의
-  `extra_ssh_public_keys = ["ssh-ed25519 ..."]`에 넣고 apply하거나(재부팅 필요), UI에 키를 한 줄씩 **모두** 넣는다.
-  복구는 새 키를 가진 장비나 Proxmox 콘솔로 접속해 `~ubuntu/.ssh/authorized_keys`에 기존 키를 다시 추가한 뒤,
-  `ssh-keygen -R <IP>`로 `known_hosts`의 옛 호스트 키를 지운다 (호스트 키 변경 원인이 위와 같다고 확인된 경우에만).
+- **Proxmox VM 재부팅/cloud-init 변경 후 SSH가 안 됨**: 원인은 보통 키가 아니라 클라이언트 쪽이다.
+  (1) `REMOTE HOST IDENTIFICATION HAS CHANGED` — cloud-init이 다시 실행되면 VM의 호스트 키가 재생성돼
+  `known_hosts`의 옛 키와 충돌한다. 장비마다 `ssh-keygen -R <IP>`로 지운다(원인이 위와 같다고 확인된 경우에만).
+  (2) `Permission denied (publickey)` — `ssh ubuntu@<IP>`는 `~/.ssh/id_ed25519` 등 기본 이름의 키만 제시한다.
+  `iac_multicloud_local`처럼 기본 이름이 아닌 키는 `-i`로 지정하거나 `~/.ssh/config`에
+  `IdentityFile`(+`IdentitiesOnly yes`)로 등록한다. 접속 사용자는 cloud-init 사용자(`ubuntu`)다.
+  (3) 다른 장비를 추가하려면 tfvars의 `extra_ssh_public_keys = ["ssh-ed25519 ..."]`에 넣는다. Proxmox UI에서
+  cloud-init 키를 바꾸면 tofu가 관리하는 값이라 다음 `tofu apply`에서 되돌려진다(drift).
