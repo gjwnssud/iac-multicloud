@@ -24,6 +24,7 @@ module "compute" {
   ssh_username          = var.ssh_username
   ssh_public_key        = var.ssh_public_key
   extra_ssh_public_keys = var.extra_ssh_public_keys
+  agent_enabled         = var.agent_enabled
 }
 
 resource "local_file" "ansible_inventory" {

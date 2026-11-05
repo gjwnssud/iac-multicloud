@@ -27,10 +27,10 @@ resource "proxmox_virtual_environment_vm" "this" {
     bridge = var.bridge
   }
 
-  # 고정 IP를 쓰므로 qemu-guest-agent 없이도 IP를 알 수 있다. 템플릿에 agent가 없는 상태에서
-  # enabled = true면 apply가 agent 응답을 기다리며 멈추므로 끈다.
+  # 템플릿에 qemu-guest-agent가 설치돼 있어야 한다 (proxmox-template 롤이 설치).
+  # 구버전 템플릿이면 apply가 agent 응답을 기다리며 멈추므로 agent_enabled=false로 끈다.
   agent {
-    enabled = false
+    enabled = var.agent_enabled
   }
 
   initialization {

@@ -22,6 +22,7 @@
 - [ ] **1. SSH 키 준비**: 사이트용 키쌍을 정한다 (기존 `~/.ssh/iac_multicloud_local` 재사용 가능, 격리가 필요하면 사이트별 분리).
 - [ ] **2. 호스트에 공개키 등록** (1회): `ssh-copy-id -i <키>.pub root@<호스트>` 후 `ssh -i <키> root@<호스트>`로 접속 확인.
 - [ ] **3. 템플릿 VM 생성** (1회): `cd ansible && ansible-playbook -i "<호스트>," -u root playbooks/proxmox-template.yml`
+  - 템플릿 이미지에 `qemu-guest-agent`를 미리 설치한다(`virt-customize`, 호스트에 `libguestfs-tools` 자동 설치). 이미 만든 구버전 템플릿(agent 없음)이면 템플릿을 `qm destroy`로 지우고 재생성하거나, tfvars에 `agent_enabled = false`를 둔다. 이미 만든 VM은 안에서 `apt install qemu-guest-agent` 후 완전 재시작.
   - root가 아닌 사용자(`-u <사용자> --private-key <키>`)는 호스트에서 sudo가 가능해야 한다 (`qm`에 root 필요). PVE 웹 UI의 admin 권한과 리눅스 sudo는 별개다.
   - datastore/브리지/VM ID가 다르면 `-e proxmox_template_datastore=<이름>` 식으로 덮어쓴다 (기본값 `local-lvm`). 디스크 이미지는 `local-lvm`(LVM-thin)에 두고, `local`(디렉토리)은 cloud image 파일 다운로드용이다. tfvars `datastore_id`도 같은 값으로 맞춘다.
 - [ ] **4. API 토큰 발급** (1회): 전용 사용자(예: `terraform@pve`)와 토큰을 만들고 **Privilege Separation은 해제**한다. `export PROXMOX_VE_API_TOKEN='user@realm!id=secret'`

@@ -103,3 +103,9 @@ variable "ssh_private_key_path" {
   type        = string
   default     = ""
 }
+
+variable "agent_enabled" {
+  description = "qemu-guest-agent 사용 여부. 구버전 템플릿(agent 미설치)이면 false"
+  type        = bool
+  default     = true
+}

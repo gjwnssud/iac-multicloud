@@ -14,6 +14,19 @@
         dest: "{{ proxmox_template_image_dir }}/{{ proxmox_template_image_url | basename }}"
         mode: "0644"
 
+    # cloud image에는 qemu-guest-agent가 없어 이미지에 미리 설치한다 (libguestfs-tools 필요).
+    - name: libguestfs-tools 설치
+      ansible.builtin.apt:
+        name: libguestfs-tools
+        state: present
+        update_cache: true
+
+    - name: 이미지에 qemu-guest-agent 설치
+      ansible.builtin.command: >-
+        virt-customize -a {{ proxmox_template_image_dir }}/{{ proxmox_template_image_url | basename }}
+        --install qemu-guest-agent --run-command 'systemctl enable qemu-guest-agent'
+      changed_when: true
+
     # import-from은 PVE 8.0+ 기능이다.
     - name: VM 생성 + 디스크 import + cloud-init 드라이브 부착
       ansible.builtin.command: "{{ item }}"
@@ -22,7 +35,7 @@
           qm create {{ proxmox_template_vmid }} --name {{ proxmox_template_name }}
           --memory {{ proxmox_template_memory_mb }} --cores {{ proxmox_template_cores }}
           --net0 virtio,bridge={{ proxmox_template_bridge }} --scsihw virtio-scsi-pci
-          --ostype l26 --serial0 socket --vga serial0
+          --ostype l26 --serial0 socket --vga serial0 --agent enabled=1
         - >-
           qm set {{ proxmox_template_vmid }}
           --scsi0 {{ proxmox_template_datastore }}:0,import-from={{ proxmox_template_image_dir }}/{{ proxmox_template_image_url | basename }}

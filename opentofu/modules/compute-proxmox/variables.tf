@@ -69,3 +69,9 @@ variable "ssh_public_key" {
   description = "cloud-init에 등록할 SSH 공개키 (OpenSSH 형식)"
   type        = string
 }
+
+variable "agent_enabled" {
+  description = "qemu-guest-agent 사용 여부. 템플릿에 agent가 없으면 false (apply가 응답 대기로 멈춤)"
+  type        = bool
+  default     = true
+}
