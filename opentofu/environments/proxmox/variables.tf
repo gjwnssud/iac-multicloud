@@ -1,5 +1,5 @@
 variable "proxmox_endpoint" {
-  description = "Proxmox API 주소 (예: https://192.168.0.100:8006/)"
+  description = "Proxmox API 주소 (예: https://10.77.0.100:8006/)"
   type        = string
 }
 
@@ -42,7 +42,7 @@ variable "bridge" {
 variable "gateway" {
   description = "LAN 게이트웨이"
   type        = string
-  default     = "192.168.0.1"
+  default     = "10.77.0.1"
 }
 
 variable "name" {
@@ -54,7 +54,7 @@ variable "name" {
 variable "server_ip_addresses" {
   description = "k3s 서버(control-plane) 노드의 고정 IP 목록 (CIDR). 길이가 서버 노드 수. VM은 120번대(.120은 Steam VM), CT는 110번대 규칙에 맞춰 지정"
   type        = list(string)
-  default     = ["192.168.0.121/24"]
+  default     = ["10.77.0.121/24"]
 }
 
 variable "agent_ip_addresses" {

@@ -154,7 +154,7 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
 `libicu74` 등 .NET 의존성 직접 설치로 crash-loop 해결, `--net host`로 k3s API 접근). 이후 `deploy.yml`의 lima
 편입은 CI 대상 환경을 `CI_ENVIRONMENTS` 변수로 지정하는 방식으로 바뀌면서 제거됐다.
 
-**Proxmox 홈서버(192.168.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
+**Proxmox 홈서버(10.77.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
 추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). 2026-10-18에 실제 apply, k3s+ArgoCD 부트스트랩, `root-proxmox.yaml` 적용 후 샘플 앱 Healthy까지 검증 완료
 (템플릿 9000, VM .122 — .121은 기존 사용 중이라 .122 사용, 노드명 `hzn`, datastore `local-lvm`).
 러너/CI 편입·이미지 빌드 자동화까지 완료(아래 TODO 참고). 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에

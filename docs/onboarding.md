@@ -68,7 +68,7 @@ sudo apt install libvirt-daemon-system qemu-kvm   # Debian/Ubuntu 계열 예시
 
 1. cloud-init 템플릿 VM을 만든다 (1회성, Proxmox 호스트에 root SSH 접속 필요. 기본 VM ID 9000):
    ```bash
-   cd ansible && ansible-playbook -i "192.168.0.100," -u root playbooks/proxmox-template.yml
+   cd ansible && ansible-playbook -i "10.77.0.100," -u root playbooks/proxmox-template.yml
    ```
    이미지 URL, VM ID, datastore는 `roles/proxmox-template/defaults/main.yml` 변수로 바꾼다. 이미 있으면 건너뛴다.
 2. Datacenter > Permissions > API Tokens에서 토큰을 발급하고 `export PROXMOX_VE_API_TOKEN='user@realm!id=secret'`로 전달한다.

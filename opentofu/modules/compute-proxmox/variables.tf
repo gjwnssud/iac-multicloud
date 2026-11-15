@@ -26,7 +26,7 @@ variable "bridge" {
 }
 
 variable "ip_address" {
-  description = "고정 IPv4 (CIDR 형식, 예: 192.168.0.130/24)"
+  description = "고정 IPv4 (CIDR 형식, 예: 10.77.0.130/24)"
   type        = string
 }
 
