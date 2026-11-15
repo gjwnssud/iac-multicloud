@@ -18,6 +18,7 @@ module "compute" {
   bridge                = var.bridge
   ip_address            = each.value.ip
   gateway               = var.gateway
+  dns_servers           = var.dns_servers
   vcpu                  = var.vcpu
   memory_mb             = var.memory_mb
   disk_size_gb          = var.disk_size_gb

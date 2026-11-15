@@ -43,6 +43,12 @@ resource "proxmox_virtual_environment_vm" "this" {
       }
     }
 
+    # 생략하면 Proxmox가 호스트의 /etc/resolv.conf를 cloud-init에 복사한다. 호스트 DNS가
+    # 어긋나면 VM도 같이 깨지므로 명시한다. 비워 두면 게이트웨이를 DNS로 쓴다.
+    dns {
+      servers = length(var.dns_servers) > 0 ? var.dns_servers : [var.gateway]
+    }
+
     user_account {
       username = var.ssh_username
       keys     = concat([var.ssh_public_key], var.extra_ssh_public_keys)

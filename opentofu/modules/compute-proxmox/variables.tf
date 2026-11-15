@@ -35,6 +35,12 @@ variable "gateway" {
   type        = string
 }
 
+variable "dns_servers" {
+  description = "VM이 쓸 DNS 서버 목록. 비우면 gateway를 DNS로 사용"
+  type        = list(string)
+  default     = []
+}
+
 variable "vcpu" {
   description = "vCPU 개수"
   type        = number

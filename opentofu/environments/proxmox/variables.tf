@@ -45,6 +45,12 @@ variable "gateway" {
   default     = "10.77.0.1"
 }
 
+variable "dns_servers" {
+  description = "VM이 쓸 DNS 서버 목록. 비우면 gateway를 DNS로 사용 (공유기가 DNS를 겸하는 일반적인 경우)"
+  type        = list(string)
+  default     = []
+}
+
 variable "name" {
   description = "리소스 이름 접두사"
   type        = string
