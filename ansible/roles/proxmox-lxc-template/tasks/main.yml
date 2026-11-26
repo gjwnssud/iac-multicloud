@@ -20,6 +20,14 @@
 - name: 템플릿 생성 (이미 템플릿이면 건너뜀)
   when: proxmox_lxc_template_config.rc != 0
   block:
+    # 템플릿에 심을 root 접속용 공개키. 파일을 못 읽으면 CT를 만들기 전에 여기서 바로 중단한다.
+    - name: root 접속용 공개키 결정
+      ansible.builtin.set_fact:
+        proxmox_lxc_template_root_keys: >-
+          {{ proxmox_lxc_template_authorized_keys
+             if proxmox_lxc_template_authorized_keys | length > 0
+             else [lookup('ansible.builtin.file', proxmox_lxc_template_authorized_keys_file) | trim] }}
+
     # 구독 없는 Proxmox는 enterprise 저장소가 401이라 pveam update가 실패할 수 있다 → 실패해도 계속 진행.
     - name: pveam 카탈로그 갱신
       ansible.builtin.command: pveam update
@@ -102,9 +110,28 @@
         pct exec {{ proxmox_lxc_template_vmid }} -- bash -c 'docker --version && docker compose version && git --version'
       changed_when: false
 
+    - name: root authorized_keys 심기
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ proxmox_lxc_template_vmid }}"
+          - --
+          - bash
+          - -c
+          - |
+            set -e
+            install -d -m 700 /root/.ssh
+            printf '%s\n' {{ proxmox_lxc_template_root_keys | map('quote') | join(' ') }} > /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+      changed_when: true
+
     # clone마다 같은 SSH host key / machine-id가 복제되면 안 된다.
     # host key는 삭제하고, 첫 부팅 때 sshd 시작 전에 재생성하도록 ssh 서비스에 드롭인을 둔다.
-    - name: 템플릿 정리 (apt 캐시, machine-id, SSH host key) + 첫 부팅 host key 재생성 설정
+    # 주의: ssh.service는 원래 `ExecStartPre=sshd -t`(설정 검사)를 먼저 실행하는데, host key가 없으면
+    # 이 검사가 실패한다. 그래서 ExecStartPre를 비운 뒤 `ssh-keygen -A`가 `sshd -t`보다 앞서도록 다시 지정한다.
+    # (단순히 ExecStartPre를 추가하면 sshd -t 뒤에 붙어 서비스가 기동에 실패한다.)
+    - name: 템플릿 정리 (apt 캐시, SSH host key, machine-id) + 첫 부팅 host key 재생성 설정/시험
       ansible.builtin.command:
         argv:
           - pct
@@ -117,10 +144,18 @@
             set -e
             apt-get clean
             rm -rf /var/lib/apt/lists/*
-            truncate -s 0 /etc/machine-id
-            rm -f /etc/ssh/ssh_host_*
             mkdir -p /etc/systemd/system/ssh.service.d
-            printf '[Service]\nExecStartPre=/usr/bin/ssh-keygen -A\n' > /etc/systemd/system/ssh.service.d/regen-hostkeys.conf
+            printf '[Service]\nExecStartPre=\nExecStartPre=/usr/bin/ssh-keygen -A\nExecStartPre=/usr/sbin/sshd -t\n' > /etc/systemd/system/ssh.service.d/regen-hostkeys.conf
+            systemctl daemon-reload
+            # 첫 부팅 시뮬레이션: host key가 없는 상태에서 sshd가 실제로 뜨는지 검증 (실패하면 여기서 중단)
+            systemctl stop ssh.service ssh.socket || true
+            rm -f /etc/ssh/ssh_host_*
+            systemctl start ssh.service
+            systemctl is-active --quiet ssh.service
+            # 검증 후 clone마다 새 키가 생기도록 다시 비운다
+            systemctl stop ssh.service ssh.socket
+            rm -f /etc/ssh/ssh_host_*
+            truncate -s 0 /etc/machine-id
       changed_when: true
 
     - name: CT 정지

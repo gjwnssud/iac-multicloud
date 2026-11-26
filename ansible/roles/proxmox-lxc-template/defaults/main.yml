@@ -15,6 +15,12 @@ proxmox_lxc_template_disk_gb: 8
 proxmox_lxc_template_build_ip: dhcp
 proxmox_lxc_template_build_gateway: ""
 proxmox_lxc_template_network_wait_seconds: 60
+# clone한 CT에는 Proxmox가 tofu의 ssh-public-keys를 적용하지 않는다(pct create 때만 적용).
+# 그래서 root 접속용 공개키를 템플릿에 미리 심는다. 모든 clone이 같은 키를 받는다.
+# 목록을 직접 주거나(-e '{"proxmox_lxc_template_authorized_keys":["ssh-ed25519 ..."]}'),
+# 비워 두면 ansible을 실행하는 머신의 아래 공개키 파일을 읽는다.
+proxmox_lxc_template_authorized_keys: []
+proxmox_lxc_template_authorized_keys_file: "~/.ssh/iac_multicloud_local.pub"
 proxmox_lxc_template_packages:
   - docker-ce
   - docker-ce-cli

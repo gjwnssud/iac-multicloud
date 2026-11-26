@@ -48,8 +48,13 @@ resource "proxmox_virtual_environment_container" "this" {
       servers = length(var.dns_servers) > 0 ? var.dns_servers : [var.gateway]
     }
 
-    user_account {
-      keys = concat([var.ssh_public_key], var.extra_ssh_public_keys)
-    }
+    # SSH 키(user_account.keys)는 두지 않는다: Proxmox는 clone한 CT에 ssh-public-keys를 적용하지 않는다
+    # (pct create 때만 적용). root 접속용 공개키는 템플릿(proxmox-lxc-template 롤)에 미리 심어 둔다.
+  }
+
+  # 예전 버전이 user_account.keys를 넣어 만든 CT는 state에 그 블록이 남아 있고, provider는 이 블록의
+  # 변경을 "교체 필요"로 처리한다. 이미 만든 CT가 삭제·재생성되지 않도록 변경을 무시한다.
+  lifecycle {
+    ignore_changes = [initialization[0].user_account]
   }
 }

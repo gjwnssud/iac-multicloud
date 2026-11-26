@@ -90,12 +90,12 @@ variable "ssh_username" {
 }
 
 variable "ssh_public_key" {
-  description = "cloud-init/CT root에 등록할 SSH 공개키"
+  description = "VM cloud-init에 등록할 SSH 공개키. CT는 해당 없음(공개키는 CT 템플릿에 심겨 있음)"
   type        = string
 }
 
 variable "extra_ssh_public_keys" {
-  description = "ssh_public_key 외에 추가 등록할 SSH 공개키 목록 (다른 장비 접속용)"
+  description = "ssh_public_key 외에 VM cloud-init에 추가 등록할 SSH 공개키 목록. CT는 해당 없음"
   type        = list(string)
   default     = []
 }

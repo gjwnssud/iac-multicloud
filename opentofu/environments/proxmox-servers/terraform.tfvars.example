@@ -4,7 +4,7 @@ proxmox_endpoint = "https://10.77.0.100:8006/"
 
 node_name      = "pve"
 ssh_public_key = "ssh-ed25519 AAAA... user@example.com"
-# extra_ssh_public_keys = ["ssh-ed25519 AAAA... other-device"]
+# extra_ssh_public_keys = ["ssh-ed25519 AAAA... other-device"] # VM 전용. CT 접속 키는 CT 템플릿에 심겨 있다
 # vm_template_vmid = 9000 # playbooks/proxmox-template.yml 로 만든 VM 템플릿
 # ct_template_vmid = 9100 # playbooks/proxmox-lxc-template.yml 로 만든 CT 템플릿(docker+compose+git)
 

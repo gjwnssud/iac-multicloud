@@ -71,14 +71,3 @@ variable "start_on_boot" {
   type        = bool
   default     = true
 }
-
-variable "ssh_public_key" {
-  description = "root 계정에 등록할 SSH 공개키 (OpenSSH 형식)"
-  type        = string
-}
-
-variable "extra_ssh_public_keys" {
-  description = "ssh_public_key 외에 root에 추가로 등록할 SSH 공개키 목록 (다른 장비에서 접속할 때)"
-  type        = list(string)
-  default     = []
-}
