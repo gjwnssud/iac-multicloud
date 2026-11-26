@@ -1,0 +1,10 @@
+---
+# Proxmox 호스트에서 1회 실행해 CT(LXC) 템플릿(Ubuntu 26.04 + docker + compose + git)을 만든다
+# (proxmox-servers 환경의 containers가 clone할 template_vmid, 기본 9100).
+# 실행: ansible-playbook -i "10.77.0.100," -u <사용자> --private-key ~/.ssh/iac_multicloud_local playbooks/proxmox-lxc-template.yml
+# root가 아닌 사용자는 호스트에서 sudo 가능해야 한다 (pct 명령에 root 권한 필요).
+- name: Proxmox CT(LXC) 템플릿 준비
+  hosts: all
+  become: true
+  roles:
+    - proxmox-lxc-template

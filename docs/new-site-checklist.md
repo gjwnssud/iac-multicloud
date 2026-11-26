@@ -52,6 +52,27 @@
   3. 시크릿 `SSH_PRIVATE_KEY`, 변수 `SSH_USERNAME`을 등록하고, GitHub Settings > Actions > Runners에서 러너가 Idle인지 확인한다.
   4. **러너가 Idle인 것을 확인한 뒤에** 변수 `CI_ENVIRONMENTS`에 환경을 추가한다 (러너 없이 지정하면 job이 24시간 대기하며 push를 막는다).
 
+## 범용 서버(VM/CT) 찍어내기 — k3s와 무관 (Proxmox)
+
+EC2처럼 필요할 때 서버를 하나씩 코드로 만든다. k3s/ArgoCD는 이 서버들 중 "k3s 노드" 용도일 뿐이고,
+아래 환경(`opentofu/environments/proxmox-servers`)은 k3s `proxmox` 환경과 **state가 분리**돼 있다.
+
+| 개념 | EC2 비유 | 이 저장소 |
+|---|---|---|
+| VM 템플릿 (9000) | AMI | `proxmox-template` 플레이북 (Ubuntu cloud image) |
+| CT 템플릿 (9100) | AMI | `proxmox-lxc-template` 플레이북 (Ubuntu 26.04 + docker + compose + git) |
+| CPU/RAM/디스크 | instance type | `terraform.tfvars`의 서버별 `vcpu`/`memory_mb`/`disk_size_gb` (템플릿 값은 최소값일 뿐) |
+| 서버 생성 | launch instance | `vms`/`containers` map에 블록 추가 → `tofu apply` |
+
+- [ ] **A. CT 템플릿 생성** (1회): `cd ansible && ansible-playbook -i "<호스트>," -u root playbooks/proxmox-lxc-template.yml` (root SSH가 막힌 호스트는 `-u <계정> -K --private-key <키>`: `-K`(대문자)는 sudo 비밀번호, `-k`(소문자)는 SSH 비밀번호)
+  - 이미 9100이 있으면 건너뛴다(멱등). 템플릿을 새로 만들려면 `pct destroy 9100` 후 재실행.
+  - CT 안에서 docker가 돌도록 템플릿은 unprivileged + `nesting=1,keyctl=1`로 만든다. nesting 외 feature는 root@pam만 바꿀 수 있어 API 토큰을 쓰는 tofu가 아니라 이 플레이북에서 박아두고 clone이 상속한다.
+  - OS 템플릿 파일명이 바뀌었으면 `-e proxmox_lxc_template_ostemplate=<파일명>` (`pveam available --section system`으로 확인). 빌드 중 DHCP가 안 되면 `-e proxmox_lxc_template_build_ip=<CIDR> -e proxmox_lxc_template_build_gateway=<GW>`.
+- [ ] **B. 서버 정의**: `cd opentofu/environments/proxmox-servers && cp terraform.tfvars.example terraform.tfvars` 후 `proxmox_endpoint`, `ssh_public_key`와 `vms`/`containers`를 채운다. IP 규칙은 CT 110번대, VM 120번대이며 수동 사용 중인 `.110`(NPM)/`.120`(Steam)/`.121`(k3s)은 피한다.
+- [ ] **C. 생성**: `tofu init && tofu plan && tofu apply`. 출력의 `container_ips`/`vm_ips`로 접속한다 (CT는 `ssh root@IP`, VM은 `ssh ubuntu@IP`).
+  - API 토큰에 CT 권한이 필요하다: `PVEVMAdmin`이 CT도 포함한다 (4번과 동일한 ACL).
+- 서버 삭제는 map에서 블록을 지우고 `tofu apply`. 이미 수동으로 만든 서버(.110/.120)는 이 환경 대상이 아니다(import는 별도 작업).
+
 ## 클라우드(aws/gcp/azure) 사이트일 때 차이점
 
 - 2~4번(호스트 키/템플릿/API 토큰) 대신 **계정 자격증명 등록**과 `opentofu/bootstrap/{cloud}` 원격 tfstate 생성이 선행된다 (실비용 발생, 사용자가 직접 실행).

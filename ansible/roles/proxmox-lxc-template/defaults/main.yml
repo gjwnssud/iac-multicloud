@@ -1,0 +1,26 @@
+---
+# CT(LXC) 템플릿 = 서버 이미지(AMI). 아래 cores/memory/disk는 템플릿의 최소값일 뿐이고,
+# 실제 크기는 tofu(proxmox-servers 환경)에서 CT마다 지정한다. 디스크는 clone 시 늘리기만 가능하므로 작게 유지.
+proxmox_lxc_template_vmid: 9100
+proxmox_lxc_template_name: ubuntu-2604-docker
+# `pveam available --section system`으로 최신 파일명을 확인할 수 있다.
+proxmox_lxc_template_ostemplate: ubuntu-26.04-standard_26.04-1_amd64.tar.zst
+proxmox_lxc_template_ostemplate_storage: local
+proxmox_lxc_template_datastore: local-lvm
+proxmox_lxc_template_bridge: vmbr0
+proxmox_lxc_template_cores: 1
+proxmox_lxc_template_memory_mb: 512
+proxmox_lxc_template_disk_gb: 8
+# 템플릿 빌드 중에만 쓰는 DHCP 네트워크가 안 되는 환경이면 고정 IP(CIDR)와 게이트웨이를 지정한다.
+proxmox_lxc_template_build_ip: dhcp
+proxmox_lxc_template_build_gateway: ""
+proxmox_lxc_template_network_wait_seconds: 60
+proxmox_lxc_template_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+  - git
+  - openssh-server
+  - sudo

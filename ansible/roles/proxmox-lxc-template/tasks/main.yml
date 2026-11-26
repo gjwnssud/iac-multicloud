@@ -1,0 +1,132 @@
+---
+# 존재 여부가 아니라 "템플릿으로 변환 완료"를 기준으로 멱등성을 판단한다.
+# (중간에 실패해 남은 반쯤 만든 CT를 완성된 템플릿으로 오인하면 이후 clone이 전부 깨진다.)
+- name: 템플릿 CT 설정 조회
+  ansible.builtin.command: "pct config {{ proxmox_lxc_template_vmid }}"
+  register: proxmox_lxc_template_config
+  changed_when: false
+  failed_when: false
+
+- name: 템플릿이 아닌 CT가 같은 ID로 남아 있으면 중단
+  ansible.builtin.fail:
+    msg: >-
+      CT {{ proxmox_lxc_template_vmid }}이(가) 이미 있지만 템플릿이 아니다 (이전 실행이 중간에 실패한 잔재일 가능성).
+      내용을 확인한 뒤 호스트에서 `pct stop {{ proxmox_lxc_template_vmid }}; pct destroy {{ proxmox_lxc_template_vmid }}`
+      로 지우고 다시 실행한다.
+  when:
+    - proxmox_lxc_template_config.rc == 0
+    - "'template: 1' not in proxmox_lxc_template_config.stdout"
+
+- name: 템플릿 생성 (이미 템플릿이면 건너뜀)
+  when: proxmox_lxc_template_config.rc != 0
+  block:
+    # 구독 없는 Proxmox는 enterprise 저장소가 401이라 pveam update가 실패할 수 있다 → 실패해도 계속 진행.
+    - name: pveam 카탈로그 갱신
+      ansible.builtin.command: pveam update
+      changed_when: false
+      failed_when: false
+
+    - name: OS 템플릿(vztmpl) 보유 여부 확인
+      ansible.builtin.command: "pveam list {{ proxmox_lxc_template_ostemplate_storage }}"
+      register: proxmox_lxc_template_pveam_list
+      changed_when: false
+
+    - name: OS 템플릿 다운로드
+      ansible.builtin.command: >-
+        pveam download {{ proxmox_lxc_template_ostemplate_storage }} {{ proxmox_lxc_template_ostemplate }}
+      when: proxmox_lxc_template_ostemplate not in proxmox_lxc_template_pveam_list.stdout
+      changed_when: true
+
+    # CT 안에서 docker가 돌려면 nesting+keyctl이 필요하다. nesting 외 feature는 root@pam만 바꿀 수 있어
+    # API 토큰을 쓰는 tofu에서는 못 건드린다 → 여기서(root 실행) 박아두고 clone이 상속한다.
+    - name: CT 생성
+      ansible.builtin.command: >-
+        pct create {{ proxmox_lxc_template_vmid }}
+        {{ proxmox_lxc_template_ostemplate_storage }}:vztmpl/{{ proxmox_lxc_template_ostemplate }}
+        --hostname {{ proxmox_lxc_template_name }}
+        --cores {{ proxmox_lxc_template_cores }} --memory {{ proxmox_lxc_template_memory_mb }}
+        --rootfs {{ proxmox_lxc_template_datastore }}:{{ proxmox_lxc_template_disk_gb }}
+        --net0 name=eth0,bridge={{ proxmox_lxc_template_bridge }},ip={{ proxmox_lxc_template_build_ip }}{{
+          (',gw=' ~ proxmox_lxc_template_build_gateway) if proxmox_lxc_template_build_gateway else '' }}
+        --ostype ubuntu --unprivileged 1 --features nesting=1,keyctl=1
+      changed_when: true
+
+    - name: CT 기동
+      ansible.builtin.command: "pct start {{ proxmox_lxc_template_vmid }}"
+      changed_when: true
+
+    - name: CT 네트워크(DNS) 준비 대기
+      ansible.builtin.command: >-
+        pct exec {{ proxmox_lxc_template_vmid }} -- sh -c
+        'i=0; until getent hosts download.docker.com >/dev/null 2>&1; do i=$((i+1)); [ $i -ge {{ proxmox_lxc_template_network_wait_seconds }} ] && exit 1; sleep 1; done'
+      changed_when: false
+
+    # 여러 줄 스크립트는 `>-`(줄을 공백으로 접음)를 쓰면 한 줄로 합쳐져 명령이 조용히 무력화된다.
+    # argv + 리터럴 블록(`|`)으로 줄바꿈을 보존해서 넘긴다.
+    - name: Docker 공식 apt 저장소 등록
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ proxmox_lxc_template_vmid }}"
+          - --
+          - bash
+          - -c
+          - |
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y ca-certificates curl gnupg
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+            . /etc/os-release
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" > /etc/apt/sources.list.d/docker.list
+            apt-get update
+      changed_when: true
+
+    - name: docker + compose + git + sshd 설치
+      ansible.builtin.command: >-
+        pct exec {{ proxmox_lxc_template_vmid }} -- bash -c
+        'export DEBIAN_FRONTEND=noninteractive; apt-get install -y {{ proxmox_lxc_template_packages | join(" ") }}'
+      changed_when: true
+
+    - name: docker/ssh 서비스 활성화
+      ansible.builtin.command: >-
+        pct exec {{ proxmox_lxc_template_vmid }} -- systemctl enable docker ssh
+      changed_when: true
+
+    # 템플릿에 도구가 실제로 들어갔는지 확인한다 (조용한 실패 방지).
+    - name: 설치 결과 확인 (docker, compose, git)
+      ansible.builtin.command: >-
+        pct exec {{ proxmox_lxc_template_vmid }} -- bash -c 'docker --version && docker compose version && git --version'
+      changed_when: false
+
+    # clone마다 같은 SSH host key / machine-id가 복제되면 안 된다.
+    # host key는 삭제하고, 첫 부팅 때 sshd 시작 전에 재생성하도록 ssh 서비스에 드롭인을 둔다.
+    - name: 템플릿 정리 (apt 캐시, machine-id, SSH host key) + 첫 부팅 host key 재생성 설정
+      ansible.builtin.command:
+        argv:
+          - pct
+          - exec
+          - "{{ proxmox_lxc_template_vmid }}"
+          - --
+          - bash
+          - -c
+          - |
+            set -e
+            apt-get clean
+            rm -rf /var/lib/apt/lists/*
+            truncate -s 0 /etc/machine-id
+            rm -f /etc/ssh/ssh_host_*
+            mkdir -p /etc/systemd/system/ssh.service.d
+            printf '[Service]\nExecStartPre=/usr/bin/ssh-keygen -A\n' > /etc/systemd/system/ssh.service.d/regen-hostkeys.conf
+      changed_when: true
+
+    - name: CT 정지
+      ansible.builtin.command: "pct shutdown {{ proxmox_lxc_template_vmid }} --timeout 60"
+      changed_when: true
+
+    - name: 템플릿으로 변환
+      ansible.builtin.command: "pct template {{ proxmox_lxc_template_vmid }}"
+      changed_when: true

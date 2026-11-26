@@ -34,13 +34,15 @@ iac-multicloud/
 │   │   ├── compute-azure/      # Azure VM (또는 AKS)
 │   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM (리눅스 호스트 전용)
 │   │   ├── compute-proxmox/    # Proxmox VM (cloud-init 템플릿 clone, 고정 IP)
+│   │   ├── compute-proxmox-lxc/ # Proxmox CT(LXC) (CT 템플릿 clone, 고정 IP, docker용 nesting 상속)
 │   │   └── network/            # 공통 인터페이스 (VPC/subnet 추상화)
 │   ├── environments/
 │   │   ├── aws/
 │   │   ├── gcp/
 │   │   ├── azure/
 │   │   ├── libvirt/      # 로컬 리눅스 서버/VM 환경
-│   │   └── proxmox/      # Proxmox 홈서버 (bpg/proxmox, cloud-init 템플릿 clone)
+│   │   ├── proxmox/      # Proxmox 홈서버 k3s 노드 VM (bpg/proxmox, cloud-init 템플릿 clone)
+│   │   └── proxmox-servers/ # k3s 무관 범용 서버 찍어내기 (vms/containers map → VM+CT, state는 proxmox와 분리)
 │   ├── bootstrap/               # 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성
 │   └── templates/
 │       └── inventory.tpl       # tofu output → ansible inventory 자동 생성
@@ -50,6 +52,7 @@ iac-multicloud/
 │   ├── roles/
 │   │   ├── common/             # 공통 base (방화벽, 유저, 타임존 등)
 │   │   ├── proxmox-template/   # Proxmox 호스트에 cloud-init 템플릿 VM 1회 생성 (playbooks/proxmox-template.yml)
+│   │   ├── proxmox-lxc-template/ # CT 템플릿(Ubuntu 26.04+docker+compose+git, VMID 9100) 1회 생성 (playbooks/proxmox-lxc-template.yml)
 │   │   ├── k3s/                # k3s 설치 + 클러스터 조인 (server/agent)
 │   │   └── argocd/             # ArgoCD 설치 (Helm 기반, 클러스터별 독립 설치)
 │   └── playbooks/
@@ -160,6 +163,14 @@ DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(App
 러너/CI 편입·이미지 빌드 자동화까지 완료(아래 TODO 참고). 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에
 따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
 `lima` 등록을 제거했고, 2026-10-18에 `compute-lima`/`lima` 환경 코드와 관련 문서·워크플로 분기도 삭제했다.
+
+**범용 서버(VM/CT) 찍어내기 (2026-11-26, CT 템플릿 9100 플레이북은 실환경 실행 성공, `proxmox-servers` tofu apply는 미검증)**:
+프로젝트 본래 목적(EC2처럼 서버를 코드로 하나씩 생성)에 맞춰 k3s와 무관한 서버를 만드는 경로를 추가했다.
+`proxmox-lxc-template` 롤(CT 템플릿 9100: Ubuntu 26.04 + docker + compose + git, unprivileged + nesting/keyctl),
+`compute-proxmox-lxc` 모듈, `proxmox-servers` 환경(`vms`/`containers` map, state는 `proxmox`와 분리).
+절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md)의 "범용 서버" 절. 남은 검증: 테스트 VM+CT
+apply 후 `docker run hello-world`(사용자 확인 후 진행). 이 호스트는 root SSH 로그인을 막아 둬서 플레이북은
+`-u hzn -K`(sudo 비밀번호 입력)로 실행한다.
 
 다음 세션에서 필요할 때 진행할 것:
 

@@ -1,0 +1,19 @@
+proxmox_endpoint = "https://10.77.0.100:8006/"
+# API 토큰은 tfvars에 넣지 말고 환경변수로 전달:
+#   export PROXMOX_VE_API_TOKEN='terraform@pve!iac=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+
+node_name      = "pve"
+ssh_public_key = "ssh-ed25519 AAAA... user@example.com"
+# extra_ssh_public_keys = ["ssh-ed25519 AAAA... other-device"]
+# vm_template_vmid = 9000 # playbooks/proxmox-template.yml 로 만든 VM 템플릿
+# ct_template_vmid = 9100 # playbooks/proxmox-lxc-template.yml 로 만든 CT 템플릿(docker+compose+git)
+
+# 서버 추가 = 블록 한 줄 추가 후 `tofu apply`. 크기를 생략하면 기본값(VM 2core/2GB/20GB, CT 1core/1GB/16GB).
+# IP 규칙: CT는 110번대, VM은 120번대. 수동 사용 중인 .110(NPM) .120(Steam) .121(k3s)은 피한다.
+containers = {
+  # app-ct = { ip = "10.77.0.111/24", vcpu = 2, memory_mb = 2048, disk_size_gb = 32 }
+}
+
+vms = {
+  # work-vm = { ip = "10.77.0.125/24", vcpu = 4, memory_mb = 8192, disk_size_gb = 100 }
+}
