@@ -16,7 +16,7 @@ AWS/GCP/Azure와 로컬(Proxmox, libvirt)을 같은 코드 구조로 다룬다. 
 flowchart TB
   dev["개발자"]
   subgraph GH["GitHub"]
-    appRepo["앱 저장소 (organization)<br/>소스 + Dockerfile + deploy/values-env.yaml<br/>topic: homelab-app"]
+    appRepo["앱 저장소 (organization)<br/>소스 + Dockerfile + deploy/values-env.yaml<br/>topic: hznlabs-app"]
     infra["이 저장소<br/>opentofu / ansible / charts / argocd"]
   end
   subgraph SITE["사이트 (Proxmox 홈서버, AWS, GCP, Azure, libvirt)"]
@@ -38,7 +38,7 @@ flowchart TB
 ```
 
 - **인프라(push 기반)**: `plan.yml`(PR)과 `deploy.yml`(main)이 OpenTofu와 Ansible을 실행한다. CI가 plan/apply할 환경은 리포지토리 변수 `CI_ENVIRONMENTS`(예: `["proxmox"]`)로 지정하고, 미설정이면 아무 환경도 실행하지 않는다. 환경별 동작(러너 라벨, tofu apply 여부, 인벤토리 방식)은 `.github/environments.json`에 정의한다.
-- **앱 배포(pull 기반)**: 클러스터마다 독립 설치된 ArgoCD가 GitHub organization에서 topic `homelab-app`과 `deploy/values-<env>.yaml`이 있는 저장소를 찾아 이 저장소의 범용 chart(`charts/app`)로 배포한다. CI는 클러스터에 접근하지 않는다.
+- **앱 배포(pull 기반)**: 클러스터마다 독립 설치된 ArgoCD가 GitHub organization에서 topic `hznlabs-app`과 `deploy/values-<env>.yaml`이 있는 저장소를 찾아 이 저장소의 범용 chart(`charts/app`)로 배포한다. CI는 클러스터에 접근하지 않는다.
 - **사설망 CI**: GitHub 호스팅 러너가 닿지 않는 사설망은 k3s 노드에 self-hosted runner 컨테이너(`ansible/roles/github-runner`)를 띄운다. 저장소 단위 또는 organization 단위로 등록할 수 있다.
 
 ## 디렉터리
@@ -95,7 +95,7 @@ Proxmox는 템플릿 VM(9000)을 먼저 만들어야 한다. 순서는 [docs/new
 
 ## 앱 배포하기
 
-앱 저장소를 organization 아래에 만들고 topic `homelab-app`과 `deploy/values-<env>.yaml`, 빌드 workflow를 추가하면 된다. 이 저장소는 수정하지 않는다. 클러스터를 처음 준비할 때 GitHub 토큰 Secret과 organization 러너를 한 번 설정해야 한다. 절차는 [docs/adding-an-app.md](./docs/adding-an-app.md)에 있다.
+앱 저장소를 organization 아래에 만들고 topic `hznlabs-app`과 `deploy/values-<env>.yaml`, 빌드 workflow를 추가하면 된다. 이 저장소는 수정하지 않는다. 클러스터를 처음 준비할 때 GitHub 토큰 Secret과 organization 러너를 한 번 설정해야 한다. 절차는 [docs/adding-an-app.md](./docs/adding-an-app.md)에 있다.
 
 ## 범용 서버(VM/CT)만 만들기
 

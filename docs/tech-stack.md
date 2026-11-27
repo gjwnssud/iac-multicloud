@@ -63,7 +63,7 @@ git에 적힌 상태가 정답이라, 배포는 커밋이고 롤백은 `git reve
 
 ApplicationSet은 ArgoCD에게 "어떤 앱을 배포할지"를 규칙으로 알려 준다. 이 저장소의 규칙은 이렇다.
 
-> GitHub organization 안에서 topic이 `homelab-app`이고 `deploy/values-<env>.yaml`이 있는 저장소를 전부 배포한다.
+> GitHub organization 안에서 topic이 `hznlabs-app`이고 `deploy/values-<env>.yaml`이 있는 저장소를 전부 배포한다.
 
 - **topic**: GitHub 저장소에 붙이는 태그다. 여기서는 "이 저장소는 배포 대상"이라는 표시로 쓴다.
 - **organization**: 여러 저장소를 묶는 GitHub 조직이다. ArgoCD가 개인 계정의 저장소는 조회하지 못해서 필요하다.

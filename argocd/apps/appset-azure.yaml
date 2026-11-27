@@ -1,4 +1,4 @@
-# GitHub organization에서 topic "homelab-app"이 붙고 deploy/values-azure.yaml 이 있는 저장소를 자동 발견해
+# GitHub organization에서 topic "hznlabs-app"이 붙고 deploy/values-azure.yaml 이 있는 저장소를 자동 발견해
 # 이 인프라 저장소의 범용 chart(charts/app)로 배포한다. 앱 저장소가 생기면 이 파일은 수정하지 않는다.
 # 전제: argocd 네임스페이스에 Secret github-token(key: token)이 있어야 한다 (docs/adding-an-app.md 0절).
 apiVersion: argoproj.io/v1alpha1
@@ -17,7 +17,7 @@ spec:
             secretName: github-token
             key: token
         filters:
-          - labelMatch: "^homelab-app$"
+          - labelMatch: "^hznlabs-app$"
             pathsExist:
               - deploy/values-azure.yaml
         requeueAfterSeconds: 180

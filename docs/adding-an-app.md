@@ -5,7 +5,7 @@ ArgoCD가 GitHub organization(`hznlabs`)에서 대상 저장소를 직접 찾고
 `charts/app`으로 배포한다. 앱마다 chart를 만들 필요도 없다.
 
 ```
-앱 저장소 (hznlabs/my-app, topic: homelab-app)        이 인프라 저장소 (iac-multicloud)
+앱 저장소 (hznlabs/my-app, topic: hznlabs-app)        이 인프라 저장소 (iac-multicloud)
 ├── src/, Dockerfile                                 ├── charts/app/                 범용 chart
 ├── deploy/                                          └── argocd/apps/appset-<env>.yaml
 │   ├── values.yaml            (선택, 공통)                  └─ organization을 조회해 앱 자동 발견
@@ -30,7 +30,7 @@ ArgoCD가 GitHub organization(`hznlabs`)에서 대상 저장소를 직접 찾고
    kubectl -n argocd label secret repo-creds-hznlabs argocd.argoproj.io/secret-type=repo-creds
    ```
 3. **organization 러너**를 k3s 노드에 설치한다 (조직의 모든 저장소가 하나를 공유).
-   PAT에 `admin:org` 권한이 필요하다.
+   PAT 권한은 fine-grained 토큰이면 Organization permissions의 `Self-hosted runners`(Read and write), classic 토큰이면 `admin:org`다.
    ```bash
    ansible-playbook ... --tags github-runner \
      -e github_runner_repo=hznlabs -e github_runner_build_tools_enabled=true
@@ -44,7 +44,7 @@ ArgoCD가 GitHub organization(`hznlabs`)에서 대상 저장소를 직접 찾고
 
 1. `hznlabs` 아래에 저장소를 만든다. **저장소 이름이 곧 앱 이름**이다 (이미지 이름, k8s namespace,
    release 이름). 소문자, 숫자, 하이픈만 쓴다.
-2. 저장소에 topic **`homelab-app`** 을 붙인다 (About 옆 톱니바퀴).
+2. 저장소에 topic **`hznlabs-app`** 을 붙인다 (About 옆 톱니바퀴).
 3. `deploy/values-<env>.yaml`을 만든다 (배포할 환경마다 하나: `proxmox` 등). 이 파일이 있어야 그 환경에 배포된다.
 
 ```yaml
@@ -100,7 +100,7 @@ jobs:
 ## 3. 배포는 자동
 
 ArgoCD ApplicationSet이 3분마다 organization을 조회한다 (`requeueAfterSeconds: 180`).
-조건은 topic `homelab-app` + `deploy/values-<env>.yaml` 존재이고, 만족하면 Application
+조건은 topic `hznlabs-app` + `deploy/values-<env>.yaml` 존재이고, 만족하면 Application
 `<앱이름>-<env>`가 만들어져 배포된다. 앱 코드를 push하면 위 2단계가 새 태그를 커밋하고
 ArgoCD가 롤아웃한다.
 

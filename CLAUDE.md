@@ -114,7 +114,7 @@ iac-multicloud/
 
 ### 2026-11-27 구조 개편 (아직 실환경 미검증)
 
-- 앱 배포를 ApplicationSet(SCM Provider)으로 교체: `hznlabs` organization에서 topic `homelab-app` + `deploy/values-{env}.yaml`이 있는 저장소를 자동 발견.
+- 앱 배포를 ApplicationSet(SCM Provider)으로 교체: `hznlabs` organization에서 topic `hznlabs-app` + `deploy/values-{env}.yaml`이 있는 저장소를 자동 발견.
 - 범용 chart `charts/app`, 앱 저장소용 재사용 workflow `build-app-image.yml`(앱 저장소 자신에 이미지 태그 커밋, 별도 토큰 불필요), `build-one.sh` 분리.
 - `github-runner` role이 organization 러너(`github_runner_repo=<org>`)를 지원.
 - 샘플 앱을 `examples/sample-hello-nestjs`(앱 저장소 시작 템플릿)로 이동, `build-images.yml`과 `environments.json`의 `build` 키 제거.
@@ -122,7 +122,7 @@ iac-multicloud/
 
 ### 다음 할 일
 
-- [ ] **앱 배포 구조 실환경 검증**: (1) `argocd` 네임스페이스에 `github-token` Secret 생성 (2) `hznlabs` organization 러너 설치 (`admin:org` PAT, Runner group이 public 저장소를 허용하는지 확인) (3) `examples/sample-hello-nestjs`로 앱 저장소를 만들어 topic 부여 후 push → ArgoCD 배포 확인. 구 샘플 Application이 prune되면 finalizer가 없어 워크로드가 남을 수 있으므로 `kubectl delete ns sample-hello-nestjs`로 정리한다. 절차는 `docs/adding-an-app.md`.
+- [ ] **앱 배포 구조 실환경 검증**: (1) `argocd` 네임스페이스에 `github-token` Secret 생성 (2) `hznlabs` organization 러너 설치 (PAT 권한: fine-grained는 organization의 `Self-hosted runners` 읽기/쓰기, classic은 `admin:org`. Runner group이 public 저장소를 허용하는지 확인) (3) `examples/sample-hello-nestjs`로 앱 저장소를 만들어 topic 부여 후 push → ArgoCD 배포 확인. 구 샘플 Application이 prune되면 finalizer가 없어 워크로드가 남을 수 있으므로 `kubectl delete ns sample-hello-nestjs`로 정리한다. 절차는 `docs/adding-an-app.md`.
 - [ ] 범용 서버 안에서 `docker run hello-world` 확인 (사용자 확인 후 진행)
 - [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply (원격 tfstate 백엔드). 실비용과 전역 유일 이름이 걸려 있어 **사용자가 직접 실행**한다. Claude가 자동으로 apply하지 않는다.
 - [ ] GitHub Actions 클라우드 자격증명 등록 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`, `AZURE_CREDENTIALS`)과 vars(`ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_*`). 이미 등록된 것은 `SSH_PRIVATE_KEY`, `SSH_USERNAME`이다. `CI_ENVIRONMENTS`는 러너가 준비된 환경만 지정한다.

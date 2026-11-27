@@ -85,7 +85,7 @@ flowchart TB
 
 러너 role(`ansible/roles/github-runner`)의 동작은 다음과 같다.
 
-- `github_runner_repo`가 `owner/repo`면 **저장소 러너**, `org`처럼 슬래시가 없으면 **organization 러너**로 등록한다. organization 러너는 조직의 모든 저장소가 하나를 공유하므로 앱 저장소가 늘어도 러너를 더 설치하지 않는다 (PAT에 `admin:org` 필요).
+- `github_runner_repo`가 `owner/repo`면 **저장소 러너**, `org`처럼 슬래시가 없으면 **organization 러너**로 등록한다. organization 러너는 조직의 모든 저장소가 하나를 공유하므로 앱 저장소가 늘어도 러너를 더 설치하지 않는다 (PAT 권한: fine-grained는 Organization의 `Self-hosted runners` 읽기/쓰기, classic은 `admin:org`).
 - `github_runner_build_tools_enabled: true`면 러너 컨테이너에 nerdctl, buildkit·containerd 소켓을 마운트해서 이 러너가 이미지를 직접 빌드하고 로컬 레지스트리에 push할 수 있다. k3s가 설치된 노드에서만 켠다.
 - 라벨은 환경 `group_vars`(예: `self-hosted,proxmox`)로 정하고, workflow의 `runs-on`과 일치해야 한다.
 - k3s를 재시작하면 러너가 같이 내려가 진행 중인 job이 끊길 수 있다(`Requires=k3s.service`).
@@ -100,7 +100,7 @@ libvirt는 daemon과 원격 클라이언트 구조라 `libvirt_uri`를 `qemu+ssh
 
 앱 하나가 배포되는 과정이다.
 
-1. 개발자가 앱 저장소(organization 소속, topic `homelab-app`)에 push한다.
+1. 개발자가 앱 저장소(organization 소속, topic `hznlabs-app`)에 push한다.
 2. 앱 저장소의 workflow가 이 저장소의 재사용 workflow `build-app-image.yml`을 호출한다.
 3. organization 러너가 이미지를 빌드해 같은 노드의 로컬 레지스트리에 `<노드IP>:5000/<앱 저장소 이름>:<git sha 7자리>`로 push한다.
 4. 러너가 앱 저장소의 `deploy/values-<env>.yaml`에 `image.repository`/`image.tag`를 기록하고 앱 저장소에 커밋한다. 앱 저장소 자신에 커밋하므로 별도 토큰이 필요 없다.
@@ -110,7 +110,7 @@ libvirt는 daemon과 원격 클라이언트 구조라 `libvirt_uri`를 `qemu+ssh
 
 ```mermaid
 flowchart LR
-  org["organization<br/>topic: homelab-app<br/>deploy/values-env.yaml 있음"]
+  org["organization<br/>topic: hznlabs-app<br/>deploy/values-env.yaml 있음"]
   set["ApplicationSet<br/>appset-env.yaml"]
   appA["Application app-a-env"]
   appB["Application app-b-env"]
