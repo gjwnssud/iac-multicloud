@@ -1,0 +1,43 @@
+# apps/<app>/values-azure.yaml 이 있는 앱을 자동 발견해 범용 chart(charts/app)로 배포한다.
+# 새 앱 추가 = apps/<app>/values-azure.yaml 파일 추가 (이 파일은 수정 불필요).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps-azure
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/gjwnssud/iac-multicloud.git
+        revision: main
+        files:
+          - path: "apps/*/values-azure.yaml"
+  template:
+    metadata:
+      name: '{{ .path.basename }}-azure'
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/gjwnssud/iac-multicloud.git
+          targetRevision: main
+          path: charts/app
+          helm:
+            releaseName: '{{ .path.basename }}'
+            ignoreMissingValueFiles: true
+            valueFiles:
+              - $values/apps/{{ .path.basename }}/values.yaml
+              - $values/apps/{{ .path.basename }}/values-azure.yaml
+        - repoURL: https://github.com/gjwnssud/iac-multicloud.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .path.basename }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

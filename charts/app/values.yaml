@@ -1,0 +1,36 @@
+# 범용 앱 chart 기본값. 앱별로는 apps/<app>/values.yaml, 환경별로는 apps/<app>/values-<env>.yaml 에서 덮어쓴다.
+replicaCount: 1
+
+image:
+  repository: ""        # 필수. 예: 10.77.0.122:5000/my-app (build-images.yml이 values-<env>.yaml 에 자동 기입)
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000      # 컨테이너 포트. 환경변수 PORT 로도 주입된다
+
+# 컨테이너 환경변수 (name: value 맵). PORT 는 service.targetPort 로 자동 주입되며 여기서 같은 키로 덮어쓸 수 있다
+env: {}
+
+# HTTP 헬스체크 경로. 빈 문자열이면 readiness/liveness probe 를 만들지 않는다
+probes:
+  path: ""
+
+# k3s 내장 Traefik 기준. host 를 지정하면 NPM 등에서 <노드IP>:80 으로 포워딩해 접속한다
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  path: /
+  annotations: {}
+  tls: []               # 예: [{secretName: my-tls, hosts: [app.example.com]}]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

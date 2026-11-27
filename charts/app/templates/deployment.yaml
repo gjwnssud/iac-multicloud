@@ -1,0 +1,41 @@
+{{- $_ := required "image.repository 는 필수입니다" .Values.image.repository }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          env:
+            {{- $env := merge (deepCopy .Values.env) (dict "PORT" (toString .Values.service.targetPort)) }}
+            {{- range $k, $v := $env }}
+            - name: {{ $k }}
+              value: {{ $v | toString | quote }}
+            {{- end }}
+          {{- if .Values.probes.path }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}
+              port: {{ .Values.service.targetPort }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}
+              port: {{ .Values.service.targetPort }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

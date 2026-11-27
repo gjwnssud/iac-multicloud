@@ -1,0 +1,9 @@
+# 범용 chart(charts/app) 값 오버라이드 — 앱 공통
+image:
+  repository: sample-hello-nestjs
+
+service:
+  targetPort: 3000
+
+probes:
+  path: /healthz

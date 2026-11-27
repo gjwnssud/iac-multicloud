@@ -1,0 +1,6 @@
+apiVersion: v2
+name: app
+description: iac-multicloud 범용 앱 chart. 이미지/포트/env/ingress만 values로 받아 어떤 웹 앱이든 배포한다
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -56,9 +56,11 @@ flowchart LR
 | `opentofu/environments/` | `aws`, `gcp`, `azure`, `libvirt`(리눅스 호스트), `proxmox`(Proxmox 홈서버) |
 | `opentofu/bootstrap/` | 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성 |
 | `ansible/roles/` | `common`(base), `k3s`(server/agent), `argocd`(Helm 설치), `registry`(로컬 사설 레지스트리), `github-runner`(self-hosted runner 컨테이너, 선택 사항), `proxmox-template`(Proxmox cloud-init 템플릿 VM 생성) |
-| `argocd/apps/` | 환경별 ArgoCD `Application` 매니페스트 (`{app}-{env}.yaml`) |
+| `argocd/apps/` | 환경별 ArgoCD `ApplicationSet` (`appset-{env}.yaml`) — `apps/*/values-{env}.yaml`을 자동 발견해 앱 배포 |
 | `argocd/bootstrap/` | 클러스터당 1회 적용하는 app-of-apps 루트 (`root-{env}.yaml`) |
-| `apps/` | 앱별 Helm chart. `sample-hello-nestjs`는 파이프라인 검증용 샘플 |
+| `scripts/` | `set-repo-url.sh <URL>` — 포크/템플릿으로 쓸 때 ArgoCD 매니페스트의 `repoURL`을 한 번에 교체 |
+| `charts/app/` | 범용 앱 Helm chart (이미지/포트/env/ingress를 values로 받음) |
+| `apps/` | 앱별 values(`values.yaml`, `values-{env}.yaml`)와 (선택) 소스. `sample-hello-nestjs`는 파이프라인 검증용 샘플 |
 | `policy/` | OPA(Conftest) 정책 — PR 단계 `tofu plan` 검증 |
 | `.github/workflows/` | 인프라 전용 CI/CD (`plan.yml`, `deploy.yml`) |
 

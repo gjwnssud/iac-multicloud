@@ -17,7 +17,7 @@
 | 프로비저닝 | OpenTofu | VM 또는 관리형 K8s 클러스터 생성 |
 | 클러스터 구성 | Ansible | 로컬/온프렘 VM에 k3s 설치·부트스트랩 전용 (관리형 K8s는 클라우드가 컨트롤 플레인 관리) |
 | 컨테이너 런타임 | k3s 내장 containerd | 별도 Docker 설치 불필요. Docker는 CI 빌드 단계에서만 사용 |
-| 앱 배포 표준 | Helm chart | `docker-compose.yml` 대신 앱마다 Helm chart 하나 |
+| 앱 배포 표준 | 범용 Helm chart(`charts/app`) + 앱별 values | `docker-compose.yml` 대신 values 파일 하나. 범용 chart로 표현 안 되는 앱만 별도 chart |
 | 앱 배포 방식 | **ArgoCD (GitOps, pull 기반)** | 클러스터가 git 저장소를 직접 polling, push 방향 아님 → 로컬/클라우드 네트워크 도달성 문제 원천 해결 |
 | CI/CD | GitHub Actions | **인프라(tofu plan/apply, k3s+ArgoCD 부트스트랩)까지만 담당**. 앱 배포는 트리거하지 않음 |
 | 정책 검증 | OPA (Conftest) | PR 단계에서 tofu plan 결과 검증 |
@@ -60,14 +60,13 @@ iac-multicloud/
 ├── argocd/
 │   ├── bootstrap/               # app-of-apps 패턴 root Application (클러스터당 1회 적용)
 │   └── apps/
-│       ├── {app}-local.yaml     # ArgoCD Application 매니페스트 (환경별)
-│       ├── {app}-aws.yaml
-│       └── ...
+│       └── appset-{env}.yaml    # ApplicationSet (환경당 1개) — apps/*/values-{env}.yaml 자동 발견
+├── charts/
+│   └── app/                      # 범용 앱 Helm chart (이미지/포트/env/ingress를 values로 받음)
 ├── apps/
 │   └── {app-name}/
-│       └── chart/                # 앱별 Helm chart (인프라 코드와 완전 분리)
-│           ├── values.yaml        # 공통 값
-│           └── values-{env}.yaml  # 환경별 오버라이드 (ArgoCD Application에서 참조)
+│       ├── values.yaml           # 앱 공통 값 (선택)
+│       └── values-{env}.yaml     # 배포할 환경마다 하나 (이 파일이 있으면 ApplicationSet이 배포)
 ├── policy/
 │   └── *.rego                    # OPA 정책
 └── .github/workflows/
@@ -91,7 +90,7 @@ iac-multicloud/
 ## 5. 설계 원칙
 
 - **Provider 추상화**: OpenTofu 모듈 입출력 변수명을 클라우드 간 통일 → `environments/` 레이어만 provider 교체
-- **앱 비의존성**: Ansible은 k3s 설치까지만 책임, 앱 배포 로직은 `apps/{app}/chart/`에 격리 → 새 애플리케이션 추가 시 인프라 코드 변경 불필요
+- **앱 비의존성**: Ansible은 k3s 설치까지만 책임, 앱 배포 설정은 `apps/{app}/values-{env}.yaml`(범용 chart `charts/app` 사용)에 격리 → 새 애플리케이션 추가 시 인프라 코드 변경 불필요
 - **컨테이너 런타임 통일**: 모든 환경에서 k3s 내장 containerd 사용, Docker는 CI 빌드 단계 전용
 - **State 격리**: 클라우드별 원격 backend(S3/GCS/AzureRM), 로컬은 로컬 state 또는 MinIO
 - **점진적 확장**: 단일 노드 → 이중화 → 워커 노드 추가 → 클라우드 관리형 이관까지 Helm chart는 변경 없이 재사용
