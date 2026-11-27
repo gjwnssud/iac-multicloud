@@ -42,6 +42,13 @@ ArgoCD가 GitHub organization(`hznlabs`)에서 대상 저장소를 직접 찾고
 
 `examples/sample-hello-nestjs`가 그대로 복사해 쓸 수 있는 시작점이다.
 
+> **숨김 파일 주의**: 템플릿에는 `.github/`, `.dockerignore`, `.gitignore`가 있다. `cp -R examples/sample-hello-nestjs/* <새 저장소>`는 이 숨김 항목을 빼먹는다. 아래처럼 `/.`로 복사한다.
+> ```bash
+> cp -R examples/sample-hello-nestjs/. <새 저장소 경로>/
+> ```
+> 복사 뒤 `.github/workflows/deploy.yml`의 `<owner>/<infra-repo>`를 인프라 저장소로 바꾼다.
+> 전역 gitignore가 `deploy/`를 제외하는 환경이면 `git add`가 `deploy/`를 조용히 건너뛰므로, 템플릿의 `.gitignore`(`!deploy/`)를 반드시 함께 복사하고 `git status`로 `deploy/`가 올라가는지 확인한다.
+
 1. `hznlabs` 아래에 저장소를 만든다. **저장소 이름이 곧 앱 이름**이다 (이미지 이름, k8s namespace,
    release 이름). 소문자, 숫자, 하이픈만 쓴다.
 2. 저장소에 topic **`hznlabs-app`** 을 붙인다 (About 옆 톱니바퀴).

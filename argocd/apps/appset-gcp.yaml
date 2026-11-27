@@ -11,6 +11,7 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - scmProvider:
+        cloneProtocol: https   # 기본은 ssh(git@github.com:...)라 토큰(HTTPS)만 있는 클러스터에서 clone이 실패한다
         github:
           organization: hznlabs
           tokenRef:

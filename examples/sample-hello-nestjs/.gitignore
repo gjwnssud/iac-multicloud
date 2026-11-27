@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+
+# 일부 환경의 전역 gitignore가 deploy/ 를 제외하므로 다시 포함한다 (배포 설정이 들어 있음)
+!deploy/
+!deploy/**
