@@ -47,9 +47,8 @@ variable "bridge" {
 }
 
 variable "gateway" {
-  description = "LAN 게이트웨이"
+  description = "LAN 게이트웨이 (필수. 예: 10.77.0.1)"
   type        = string
-  default     = "10.77.0.1"
 }
 
 variable "dns_servers" {

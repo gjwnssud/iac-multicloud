@@ -40,9 +40,8 @@ variable "bridge" {
 }
 
 variable "gateway" {
-  description = "LAN 게이트웨이"
+  description = "LAN 게이트웨이 (필수. 예: 10.77.0.1)"
   type        = string
-  default     = "10.77.0.1"
 }
 
 variable "dns_servers" {
@@ -60,7 +59,6 @@ variable "name" {
 variable "server_ip_addresses" {
   description = "k3s 서버(control-plane) 노드의 고정 IP 목록 (CIDR). 길이가 서버 노드 수. VM은 120번대(.120은 Steam VM), CT는 110번대 규칙에 맞춰 지정"
   type        = list(string)
-  default     = ["10.77.0.121/24"]
 }
 
 variable "agent_ip_addresses" {
