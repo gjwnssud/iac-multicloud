@@ -14,7 +14,7 @@
 | `terraform.tfvars` 사이트별 값 | 수동 작성 | 사이트당 1회 |
 | 신규 VM의 SSH 키 주입 | cloud-init 자동 | 매번 자동 |
 | k3s + ArgoCD 설치 | Ansible | 매번 자동 |
-| 앱 배포 | ArgoCD (`root-{env}.yaml` 1회 적용 후 자동) | 클러스터당 1회 |
+| 앱 배포 | ArgoCD (`root-{env}.yaml` 1회 적용 후 자동. GitHub 토큰 Secret과 organization 러너도 1회) | 클러스터당 1회 |
 
 ## 체크리스트 (Proxmox 사이트 기준)
 
@@ -35,20 +35,20 @@
     ```
   - 부족하면 `tofu apply`가 `403 Permission check failed (<경로>, <권한>)`으로 실패한다. 메시지의 경로/권한에 맞춰 추가한다.
 - [ ] **5. 환경 디렉토리 준비**: 사이트가 하나면 `opentofu/environments/proxmox`를 그대로 쓰고, 둘 이상이면 복사해 이름을 구분한다.
-  `terraform.tfvars.example` → `terraform.tfvars` 복사 후 `proxmox_endpoint`, `node_name`, `template_vmid`, `ssh_public_key`, `server_ip_addresses`, `gateway` 입력. VM의 DNS는 기본으로 `gateway`를 쓰고, 다른 DNS가 필요하면 `dns_servers = ["..."]`로 지정한다 (Proxmox 호스트의 DNS 설정과 무관하게 VM에 직접 들어간다). 다른 장비에서도 VM에 접속해야 하면 `extra_ssh_public_keys = ["ssh-ed25519 ..."]`에 공개키를 추가한다 (Proxmox UI에서 직접 넣으면 tofu와 어긋나므로 tfvars로 관리).
-- [ ] **6. `tofu apply`**: `cd opentofu/environments/proxmox && tofu init && tofu plan && tofu apply`. `hosts.ini`가 자동 생성된다.
-- [ ] **7. k3s + ArgoCD 부트스트랩**: `cd ansible && ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml`
+  `terraform.tfvars.example` → `terraform.tfvars` 복사 후 `proxmox_endpoint`, `node_name`, `template_vmid`, `ssh_public_key`, `server_ip_addresses`, `gateway`를 입력한다. 이 중 `template_vmid`, `ssh_public_key`, `server_ip_addresses`, `gateway`는 기본값이 없는 필수 값이다. VM의 DNS는 기본으로 `gateway`를 쓰고, 다른 DNS가 필요하면 `dns_servers = ["..."]`로 지정한다 (Proxmox 호스트의 DNS 설정과 무관하게 VM에 직접 들어간다). 다른 장비에서도 VM에 접속해야 하면 `extra_ssh_public_keys = ["ssh-ed25519 ..."]`에 공개키를 추가한다 (Proxmox UI에서 직접 넣으면 tofu와 어긋나므로 tfvars로 관리).
+- [ ] **6. `tofu apply`**: `cd opentofu/environments/proxmox && tofu init && tofu plan && tofu apply`. `ansible/inventories/proxmox/hosts.ini`가 자동 생성된다.
+- [ ] **7. k3s + 레지스트리 + ArgoCD 설치**: `cd ansible && ansible-playbook -i inventories/proxmox/hosts.ini playbooks/site.yml`
 - [ ] **8. 클러스터 확인**: `ansible/fetched/`의 kubeconfig로 `kubectl get nodes`.
-- [ ] **9. GitOps 루프 시작** (클러스터당 1회): `kubectl apply -f argocd/bootstrap/root-proxmox.yaml` 후 ArgoCD UI에서 Sync 확인.
+- [ ] **9. GitOps 루프 시작** (클러스터당 1회): `kubectl apply -f argocd/bootstrap/root-proxmox.yaml` 후 ArgoCD UI에서 Sync 확인. 앱 배포를 쓰려면 이어서 [adding-an-app.md](./adding-an-app.md) 0절(GitHub 토큰 Secret, organization 러너)을 1회 수행한다. Secret이 없으면 ApplicationSet이 오류 상태가 된다.
 - [ ] **10. CI 편입** (선택, 위 단계 검증 후):
   1. `.github/environments.json`에 환경 항목이 있는지 확인한다 (없으면 추가: `provider`, `runs_on`, `plan`, `tofu_apply`, `inventory`).
      - 사설망 + 로컬 tfstate 사이트는 `tofu_apply: false`, `plan: false`, `inventory: dynamic`(ansible만 CI, tofu는 사람이 실행)을 권장한다. 러너가 관리 대상 VM 안에서 돌아 로컬 state를 잃으면 VM을 재생성하려 하기 때문이다.
-  2. 사설망이면 k3s 서버 노드에 self-hosted runner를 설치한다 (PAT는 채팅/커밋에 남기지 말 것). 라벨은 `runs_on`과 일치해야 한다:
+  2. 사설망이면 k3s 서버 노드에 self-hosted runner를 설치한다 (PAT는 채팅/커밋에 남기지 말 것). 라벨은 `runs_on`과 일치해야 한다. 이 저장소의 CI용 러너는 저장소 러너로 등록한다:
      ```bash
      cd ansible && ansible-playbook -i inventories/<env>/hosts.ini playbooks/site.yml --tags github-runner \
        -e github_runner_repo=<owner>/<repo> -e github_runner_pat=<PAT>
      ```
-  - 앱 이미지 빌드를 CI에서 하려면 환경의 `group_vars`에 `github_runner_build_tools_enabled: true`를 두고 `environments.json`에 `"build": true`를 설정한다 (k3s 롤이 nerdctl/buildkit을 이미 설치한 노드 전제).
+  - 앱 이미지 빌드용 러너는 **organization 러너**(`-e github_runner_repo=<org>`)로 따로 등록하고 환경의 `group_vars` 또는 `-e`로 `github_runner_build_tools_enabled: true`를 준다. 같은 호스트에 러너를 여러 개 띄울 수 있다 (등록 대상 이름으로 컨테이너와 유닛이 구분됨). 자세한 내용은 [adding-an-app.md](./adding-an-app.md) 0절에 있다.
   3. 시크릿 `SSH_PRIVATE_KEY`, 변수 `SSH_USERNAME`을 등록하고, GitHub Settings > Actions > Runners에서 러너가 Idle인지 확인한다.
   4. **러너가 Idle인 것을 확인한 뒤에** 변수 `CI_ENVIRONMENTS`에 환경을 추가한다 (러너 없이 지정하면 job이 24시간 대기하며 push를 막는다).
 

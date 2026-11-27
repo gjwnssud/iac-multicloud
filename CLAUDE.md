@@ -1,27 +1,29 @@
 # iac-multicloud 구축 계획서
 
-> 저장소명: `iac-multicloud` (github.com/gjwnssud/iac-multicloud)
-> Claude Code 세션 시작 시 이 문서를 참조하여 순서대로 작업을 진행한다.
+> 저장소: `iac-multicloud` (github.com/gjwnssud/iac-multicloud, 개인 계정 소유, public)
+> Claude Code 세션 시작 시 이 문서를 참조해 작업을 이어간다. 최종 갱신: 2026-11-27.
 
 ## 1. 목표
 
-멀티클라우드(AWS/GCP/Azure) + 로컬(온프레미스/베어메탈) 인프라를 **동일한 코드 구조**로 프로비저닝하고, 애플리케이션 종류(Java/Spring Boot, NestJS 등)에 무관하게 **k3s + Helm 기반 배포**로 통일한다.
+서버(VM/CT)를 EC2처럼 코드로 찍어내고, 그 위에서 어떤 앱이든 **같은 방식으로 자동 배포**한다.
+멀티클라우드(AWS/GCP/Azure)와 로컬(Proxmox 홈서버, libvirt)을 **동일한 코드 구조**로 다룬다.
 
-- 시작 규모: 단일 노드 또는 이중화(2노드)
-- 목표: 노드/워크로드 추가 시 아키텍처 변경 없이 확장 가능
+- 지금 용도: 개인 앱을 개발해서 홈랩(Proxmox)에 자동 배포. 규모가 커져도 아키텍처 변경 없이 확장 가능해야 한다.
+- 서버만 필요한 경우(k3s 없이)와 앱 배포(k3s + ArgoCD) 두 경로를 모두 지원한다.
 
 ## 2. 기술 스택
 
 | 레이어 | 도구 | 비고 |
 |---|---|---|
-| 프로비저닝 | OpenTofu | VM 또는 관리형 K8s 클러스터 생성 |
-| 클러스터 구성 | Ansible | 로컬/온프렘 VM에 k3s 설치·부트스트랩 전용 (관리형 K8s는 클라우드가 컨트롤 플레인 관리) |
-| 컨테이너 런타임 | k3s 내장 containerd | 별도 Docker 설치 불필요. Docker는 CI 빌드 단계에서만 사용 |
-| 앱 배포 표준 | 범용 Helm chart(`charts/app`) + 앱별 values | `docker-compose.yml` 대신 values 파일 하나. 범용 chart로 표현 안 되는 앱만 별도 chart |
-| 앱 배포 방식 | **ArgoCD (GitOps, pull 기반)** | 클러스터가 git 저장소를 직접 polling, push 방향 아님 → 로컬/클라우드 네트워크 도달성 문제 원천 해결 |
-| CI/CD | GitHub Actions | **인프라(tofu plan/apply, k3s+ArgoCD 부트스트랩)까지만 담당**. 앱 배포는 트리거하지 않음 |
-| 정책 검증 | OPA (Conftest) | PR 단계에서 tofu plan 결과 검증 |
-| 시크릿 | 클라우드 네이티브 시크릿 매니저(AWS/GCP/Azure) + 로컬은 SOPS | Vault는 규모 확대 시 도입 검토 |
+| 프로비저닝 | OpenTofu | VM/CT 생성. 클라우드는 원격 state, 로컬은 로컬 state |
+| 클러스터 구성 | Ansible | k3s, 로컬 레지스트리, ArgoCD 설치 (`site.yml`). 관리형 K8s는 해당 없음 |
+| 컨테이너 런타임 | k3s 내장 containerd | Docker 불필요. 이미지 빌드는 k3s 소켓에 붙는 nerdctl + buildkit |
+| 이미지 보관 | 로컬 레지스트리 (k3s 서버 노드 :5000) | `registry` role. 모든 노드에 mirror 설정 |
+| 앱 배포 표준 | 범용 Helm chart `charts/app` + 앱별 values | 앱마다 chart를 만들지 않는다. 범용 chart로 안 되는 앱만 별도 chart |
+| 앱 배포 방식 | **ArgoCD (GitOps, pull)** + ApplicationSet(SCM Provider) | 클러스터마다 독립 설치. GitHub organization을 조회해 앱 저장소를 자동 발견 |
+| CI/CD | GitHub Actions | 인프라(plan/apply, ansible)와 앱 이미지 빌드만. 클러스터에 배포를 push하지 않음 |
+| 정책 검증 | OPA (Conftest) | PR에서 tofu plan 결과 검증 (인스턴스 타입 허용 목록, SSH 0.0.0.0/0 차단) |
+| 시크릿 | 클라우드 네이티브 시크릿 매니저 + 로컬은 SOPS | Vault는 규모 확대 시 검토 (아직 미도입) |
 
 ## 3. 저장소 구조
 
@@ -29,177 +31,102 @@
 iac-multicloud/
 ├── opentofu/
 │   ├── modules/
-│   │   ├── compute-aws/        # EC2 (또는 EKS)
-│   │   ├── compute-gcp/        # Compute Engine (또는 GKE)
-│   │   ├── compute-azure/      # Azure VM (또는 AKS)
-│   │   ├── compute-libvirt/    # 로컬 KVM/QEMU VM (리눅스 호스트 전용)
-│   │   ├── compute-proxmox/    # Proxmox VM (cloud-init 템플릿 clone, 고정 IP)
-│   │   ├── compute-proxmox-lxc/ # Proxmox CT(LXC) (CT 템플릿 clone, 고정 IP, docker용 nesting 상속)
-│   │   └── network/            # 공통 인터페이스 (VPC/subnet 추상화)
+│   │   ├── compute-{aws,gcp,azure,libvirt}/
+│   │   ├── compute-proxmox/        # Proxmox VM (cloud-init 템플릿 clone, 고정 IP)
+│   │   ├── compute-proxmox-lxc/    # Proxmox CT (CT 템플릿 clone, 고정 IP, docker용 nesting 상속)
+│   │   └── network/{aws,gcp,azure,libvirt}/
 │   ├── environments/
-│   │   ├── aws/
-│   │   ├── gcp/
-│   │   ├── azure/
-│   │   ├── libvirt/      # 로컬 리눅스 서버/VM 환경
-│   │   ├── proxmox/      # Proxmox 홈서버 k3s 노드 VM (bpg/proxmox, cloud-init 템플릿 clone)
-│   │   └── proxmox-servers/ # k3s 무관 범용 서버 찍어내기 (vms/containers map → VM+CT, state는 proxmox와 분리)
-│   ├── bootstrap/               # 원격 tfstate 저장소(S3/GCS/Storage Account) 1회성 생성
-│   └── templates/
-│       └── inventory.tpl       # tofu output → ansible inventory 자동 생성
+│   │   ├── aws/ gcp/ azure/ libvirt/
+│   │   ├── proxmox/            # k3s 노드 VM (server_ip_addresses/agent_ip_addresses)
+│   │   └── proxmox-servers/    # k3s 무관 범용 서버 (vms/containers map, state는 proxmox와 분리)
+│   ├── bootstrap/{aws,gcp,azure}/   # 원격 tfstate 저장소 1회성 생성
+│   └── templates/inventory.tpl      # tofu output -> ansible hosts.ini
 ├── ansible/
-│   ├── inventories/
-│   │   └── {env}/hosts.ini     # tofu가 자동 생성
-│   ├── roles/
-│   │   ├── common/             # 공통 base (방화벽, 유저, 타임존 등)
-│   │   ├── proxmox-template/   # Proxmox 호스트에 cloud-init 템플릿 VM 1회 생성 (playbooks/proxmox-template.yml)
-│   │   ├── proxmox-lxc-template/ # CT 템플릿(Ubuntu 26.04+docker+compose+git, VMID 9100) 1회 생성 (playbooks/proxmox-lxc-template.yml)
-│   │   ├── k3s/                # k3s 설치 + 클러스터 조인 (server/agent)
-│   │   └── argocd/             # ArgoCD 설치 (Helm 기반, 클러스터별 독립 설치)
-│   └── playbooks/
-│       └── site.yml
+│   ├── inventories/{libvirt,proxmox}/group_vars/all.yml   # hosts.ini는 tofu가 생성(gitignore)
+│   ├── playbooks/{site,proxmox-template,proxmox-lxc-template}.yml
+│   └── roles/{common,k3s,registry,argocd,github-runner,proxmox-template,proxmox-lxc-template}/
+├── charts/app/                  # 범용 앱 chart (image/service/env/probes/ingress/resources)
 ├── argocd/
-│   ├── bootstrap/               # app-of-apps 패턴 root Application (클러스터당 1회 적용)
-│   └── apps/
-│       └── appset-{env}.yaml    # ApplicationSet (환경당 1개) — apps/*/values-{env}.yaml 자동 발견
-├── charts/
-│   └── app/                      # 범용 앱 Helm chart (이미지/포트/env/ingress를 values로 받음)
-├── apps/
-│   └── {app-name}/
-│       ├── values.yaml           # 앱 공통 값 (선택)
-│       └── values-{env}.yaml     # 배포할 환경마다 하나 (이 파일이 있으면 ApplicationSet이 배포)
-├── policy/
-│   └── *.rego                    # OPA 정책
-└── .github/workflows/
-    ├── plan.yml                  # PR 시 tofu plan + OPA 검증
-    └── deploy.yml                # merge 시 tofu apply + ansible-playbook (k3s+ArgoCD 부트스트랩만 담당, 앱 배포는 트리거 안 함)
+│   ├── bootstrap/root-{env}.yaml   # 클러스터당 1회 적용하는 루트 Application (include "*-{env}.yaml")
+│   └── apps/appset-{env}.yaml      # 환경당 ApplicationSet (organization에서 앱 저장소 자동 발견)
+├── examples/sample-hello-nestjs/   # 앱 저장소 시작 템플릿 (배포 대상 아님)
+├── scripts/set-repo-url.sh         # 포크/템플릿 사용 시 repoURL, organization 일괄 교체
+├── policy/*.rego
+├── docs/                           # architecture, tech-stack, onboarding, new-site-checklist, adding-a-node, adding-an-app
+└── .github/
+    ├── environments.json           # 환경별 메타데이터 (provider, runs_on, plan, tofu_apply, inventory)
+    ├── scripts/{select-environments,build-one,set-image}.sh
+    └── workflows/{plan,deploy,build-app-image}.yml
 ```
 
-## 4. 단계별 실행 계획
+## 4. 단계별 실행 계획 (Phase 0~7 완료)
 
-| Phase | 내용 | 완료 기준 |
+| Phase | 내용 | 상태 |
 |---|---|---|
-| 0. 초기화 | `iac-multicloud` 레포 생성, `.gitignore`, `versions.tf`, README 스캐폴딩 | 디렉토리 구조 생성 완료 |
-| 1. 공통 모듈 | `network`, `compute-*` 모듈 작성 (provider별 input/output 변수명 통일: `instance_ip`, `instance_id` 등) | 각 provider에서 `tofu plan` 통과 |
-| 2. k3s + ArgoCD 부트스트랩 | Ansible `common`, `k3s`, `argocd` 롤 작성 + inventory 자동 생성 템플릿 | 로컬 VM 1대에서 k3s 단일 노드 + ArgoCD 정상 기동, UI/CLI 접근 확인 |
-| 3. 이중화 구성 | k3s 서버 노드 2대 구성 (또는 서버 1 + 에이전트 1) | 노드 2대 클러스터 조인 확인, `kubectl get nodes` 정상 |
-| 4. 클라우드 확장 | AWS/GCP/Azure 관리형 K8s(EKS/GKE/AKS) 모듈 또는 VM+k3s 모듈 완성, 클러스터별 ArgoCD 설치 | 3개 클라우드 + 로컬 각 클러스터에 독립 ArgoCD 기동 확인 |
-| 5. CI/CD (인프라 전용) | GitHub Actions로 tofu plan/apply + ansible-playbook 파이프라인, OPA 정책 게이트 추가. 로컬 대상 apply는 self-hosted runner 필요 | PR에서 자동 plan 코멘트, main merge 시 인프라 자동 apply (앱 배포는 포함 안 함) |
-| 6. 검증 배포 | 샘플 앱(NestJS 또는 Spring Boot) Helm chart 작성 + `argocd/apps/`에 Application 등록 → git push로 각 클러스터 ArgoCD가 자동 동기화하는지 확인 | 모든 타겟 환경에서 push만으로 앱 자동 배포 및 서비스 접근 확인 |
-| 7. 문서화 | README, 아키텍처 다이어그램, 온보딩 가이드, 노드 추가 절차 문서화 | 신규 환경/앱 추가 절차 문서화 완료 |
+| 0. 초기화 | 레포, `.gitignore`, `versions.tf`, README 스캐폴딩 | 완료 |
+| 1. 공통 모듈 | `network`, `compute-*` 모듈 (입출력 이름 통일) | 완료 |
+| 2. k3s + ArgoCD 부트스트랩 | Ansible `common`, `k3s`, `argocd` + inventory 자동 생성 | 완료 |
+| 3. 이중화 구성 | 서버 1 + 에이전트 1 조인 | 완료 (서버 2대 이상의 컨트롤 플레인 이중화는 미구현) |
+| 4. 클라우드 확장 | AWS/GCP/Azure VM+k3s 모듈과 환경 | 코드 완료, 실제 apply는 안 함 |
+| 5. CI/CD | plan/deploy 워크플로, OPA 게이트 | 완료 (proxmox에서 deploy job 검증) |
+| 6. 검증 배포 | 샘플 앱을 ArgoCD로 배포 | 완료 (proxmox, 2026-10-18). 이후 배포 구조 개편으로 샘플은 `examples/`로 이동 |
+| 7. 문서화 | README, docs 6종 | 완료. 2026-11-27 전체 재작성 |
 
 ## 5. 설계 원칙
 
-- **Provider 추상화**: OpenTofu 모듈 입출력 변수명을 클라우드 간 통일 → `environments/` 레이어만 provider 교체
-- **앱 비의존성**: Ansible은 k3s 설치까지만 책임, 앱 배포 설정은 `apps/{app}/values-{env}.yaml`(범용 chart `charts/app` 사용)에 격리 → 새 애플리케이션 추가 시 인프라 코드 변경 불필요
-- **컨테이너 런타임 통일**: 모든 환경에서 k3s 내장 containerd 사용, Docker는 CI 빌드 단계 전용
-- **State 격리**: 클라우드별 원격 backend(S3/GCS/AzureRM), 로컬은 로컬 state 또는 MinIO
-- **점진적 확장**: 단일 노드 → 이중화 → 워커 노드 추가 → 클라우드 관리형 이관까지 Helm chart는 변경 없이 재사용
-- **Pull 기반 배포**: 앱 배포는 각 클러스터의 ArgoCD가 git 저장소를 직접 polling하여 처리 → CI가 클러스터로 push할 필요 없음, 로컬/사설망 인바운드 문제 원천 해결
-- **클러스터별 독립 ArgoCD**: hub-and-spoke(중앙 ArgoCD가 여러 클러스터 관리) 대신 클러스터마다 ArgoCD를 독립 설치 → 로컬 클러스터에 대한 외부 접근성 요구 자체가 없어짐
+- **Provider 추상화**: 모듈 입출력 이름을 통일해 `environments/`만 provider를 바꾼다.
+- **앱 비의존성**: 새 앱을 추가해도 인프라 저장소를 수정하지 않는다. 앱 저장소의 `deploy/values-{env}.yaml`만으로 배포된다.
+- **앱 소스는 이 저장소 밖**: 앱은 GitHub organization(`hznlabs`)의 별도 저장소. 이 저장소에는 chart와 환경 규칙만 둔다.
+- **개인 환경값은 코드 밖**: IP, 노드명 등은 gitignore된 `terraform.tfvars`에만 둔다. 변수 기본값에 개인 LAN 값을 넣지 않는다 (`gateway`, `server_ip_addresses`는 필수).
+- **컨테이너 런타임 통일**: k3s 내장 containerd. Docker는 쓰지 않는다.
+- **State 격리**: 클라우드는 원격 backend, 로컬은 로컬 state. `proxmox`와 `proxmox-servers`는 state가 분리돼 있다.
+- **Pull 기반 배포**: ArgoCD가 git/GitHub를 조회한다. CI가 클러스터로 push하지 않는다.
+- **클러스터별 독립 ArgoCD**: hub-and-spoke 대신 클러스터마다 설치해 로컬 클러스터에 대한 외부 접근 요구를 없앤다.
+- **샘플 네이밍**: 템플릿 저장소의 데모 코드는 `sample-`/`example-` 접두사를 쓴다.
 
-## 6. 확장 경로 (참고)
+## 6. 확장 경로
 
 ```
-1단계(단일)   : VM 1대 + k3s 단일 노드
-2단계(이중화) : VM 2대, k3s 서버 이중화 또는 서버+에이전트
-3단계(확장)   : 워커 노드 추가, 또는 클라우드 관리형 K8s(EKS/GKE/AKS)로 이관
-              → Helm chart는 그대로 재사용, Ansible k3s 롤만 클라우드에서는 불필요해짐
+1단계(단일)    : VM 1대 + k3s 단일 노드
+2단계(확장)    : 에이전트(워커) 노드 추가. 서버는 1대 유지
+3단계(클라우드): 같은 chart/values 구조로 AWS/GCP/Azure 환경 추가.
+                필요하면 관리형 K8s를 environments/{cloud}-eks처럼 공존 추가
 ```
 
-## 7. 리스크 / 추후 결정 사항
+## 7. 결정 사항 / 리스크
 
-- 시크릿 관리: 초기엔 클라우드 네이티브+SOPS로 시작, 팀/규모 커지면 Vault 도입 검토
-- ~~클라우드 확장 시 EKS/GKE/AKS(관리형) vs VM+k3s(직접 관리) 중 선택 필요~~ → **결정 완료**: VM+k3s
-  유지 (비용/재사용 이유). 관리형 K8s가 필요해지면 전환이 아니라 `environments/{cloud}-eks` 같은
-  형태로 **공존** 추가. 로컬은 `libvirt`(리눅스 호스트)와 `proxmox`(홈서버)로 분리
-- **인프라 변경(tofu apply, k3s 부트스트랩)은 여전히 push 기반**: GitHub 호스팅 러너는 로컬 사설망에 도달 불가하므로, 로컬 대상 인프라 작업은 self-hosted runner(로컬 네트워크 내부에 설치) 또는 로컬에서 직접 실행 필요. ArgoCD는 앱 배포 단계에만 적용되며 이 문제를 해결하지 않음
-- ArgoCD sync 방식: 기본 polling(3분 간격) 사용, 즉시 반영이 필요하면 webhook 고려하되 로컬 환경은 인바운드 제약으로 webhook 적용 어려움 — 로컬은 polling 유지 권장
+- **VM+k3s 유지, 관리형 K8s는 공존 추가**: 비용과 재사용 이유로 VM+k3s로 결정. 관리형이 필요하면 전환이 아니라 별도 환경으로 추가한다.
+- **인프라 변경은 push 기반**: GitHub 호스팅 러너가 사설망에 닿지 못하므로 로컬 대상은 self-hosted runner 또는 사람이 직접 실행한다. proxmox는 러너가 관리 대상 VM 안에서 돌고 tfstate가 로컬이라 `tofu_apply: false`(CI는 ansible만)다.
+- **앱 배포에 organization이 필요**: ArgoCD SCM Provider(GitHub)가 organization 단위로만 저장소를 조회하고 개인 계정은 지원하지 않는다. 앱 저장소는 `hznlabs`에 두고, 인프라 저장소는 개인 계정(`gjwnssud`)에 그대로 둔다.
+- **ArgoCD 폴링**: 3분 간격. webhook은 로컬 환경의 인바운드 제약으로 쓰지 않는다.
+- **시크릿**: ArgoCD의 GitHub 토큰(`github-token` Secret)은 클러스터에 직접 만든다. PAT는 채팅/커밋에 남기지 않는다.
+- **전역 gitignore 충돌**: `~/.gitignore_global`이 `CLAUDE.md`, `docs/`를 제외하므로 이 저장소 `.gitignore`가 `!CLAUDE.md`, `!docs/**`로 다시 포함한다. 새 문서를 추가한 뒤 `git status`로 추적되는지 확인한다.
+- **이전 방식 이력**: 저장소 안 `apps/<app>/values-{env}.yaml` 방식과 `build-images.yml`은 SCM Provider 방식으로 교체돼 삭제됐다 (git 이력에서 복구 가능).
 
-## 8. 진행 상태 및 다음 할 일 (2026-09-01 기준)
+## 8. 진행 상태 및 다음 할 일 (2026-11-27 기준)
 
-Phase 0~7 전체 완료. GitHub 원격 저장소 생성 및 push 완료
-(https://github.com/gjwnssud/iac-multicloud, public).
+### 검증 완료
 
-`lima`(macOS) 환경은 end-to-end 검증까지 마쳤으나 Proxmox 홈서버로 방향을 바꾸면서 2026-10-18에 코드·러너·VM을
-모두 제거했다(git 이력 `2c44deb` 이전에서 복구 가능). 과거 Actions 실행 이력(run 32325148355)에서
-aws/gcp/azure는 자격증명 미등록으로 즉시 실패, `libvirt`는 매칭되는 self-hosted runner가 없어 24시간
-대기 후 타임아웃 — 아래 TODO들이 그 원인이다.
+- **Proxmox 홈서버(10.77.0.100)**: 템플릿 9000, k3s VM(.122, 노드명 `hzn`, datastore `local-lvm`), k3s + 레지스트리 + ArgoCD, `root-proxmox.yaml` 적용 후 샘플 앱 Healthy (2026-10-18). self-hosted runner 설치와 `CI_ENVIRONMENTS=["proxmox"]` deploy job(ansible) success, 이미지 빌드 자동화(2026-10-20)까지 확인했다. 단, 이미지 빌드 자동화는 지금은 교체된 이전 방식으로 검증한 것이다.
+- **범용 서버(2026-11-26)**: CT 템플릿 9100(Ubuntu 26.04 + docker + compose + git, unprivileged + nesting/keyctl) 플레이북 실행 성공, `proxmox-servers`로 CT 1대(106) 생성, `tofu plan` No changes.
+- 이 호스트는 root SSH 로그인을 막아 두어 플레이북은 `-u hzn -K`(sudo 비밀번호)로 실행한다.
+- 과거 `lima`(macOS) 환경은 end-to-end 검증 후 Proxmox로 방향을 바꾸면서 2026-10-18에 코드·러너·VM을 모두 제거했다 (git 이력 `2c44deb` 이전에서 복구 가능).
 
-**libvirt는 daemon+원격 클라이언트 구조**라 `libvirt_uri`를 `qemu+ssh://...`로 주면 게스트 VM 안
-러너 컨테이너가 `tofu apply`부터 `ansible-playbook`까지 전부 처리할 수 있다 (자세한 내용은
-[docs/architecture.md](./docs/architecture.md) 3절). 이 방향으로 `opentofu/environments/libvirt/variables.tf`
-(`libvirt_uri` 원격 URI 설명), `terraform.tfvars.example`, `ansible/roles/github-runner`
-(`github_runner_extra_packages` 변수), `ansible/inventories/libvirt/group_vars/all.yml`(`libvirt-clients` 설치,
-라벨 오버라이드)까지 코드는 반영해뒀다.
+### 2026-11-27 구조 개편 (아직 실환경 미검증)
 
-**실제 Linux/libvirtd 호스트 대신 Lima VM(`iac-multicloud-libvirt-devbox`)으로 시험 apply를 시도함**
-(Apple Silicon이라 KVM 가속 없음, TCG로만 동작). 이 과정에서 실제 버그 2개를 발견해 고쳤고 커밋됨
-(KVM 미지원 호스트에서도, 실제 KVM 호스트에서도 안전한 변경):
-- `libvirt_domain`이 항상 `type="kvm"`으로 고정 → `domain_type` 변수 추가 (기본값 `kvm` 유지, override 가능)
-- `cloudinit` top-level 속성이 항상 IDE bus cdrom으로 붙는데 aarch64 `virt` machine은 IDE 자체를
-  지원 안 함 → 일반 disk + `scsi=true`로 변경 (모든 아키텍처에서 동작)
+- 앱 배포를 ApplicationSet(SCM Provider)으로 교체: `hznlabs` organization에서 topic `homelab-app` + `deploy/values-{env}.yaml`이 있는 저장소를 자동 발견.
+- 범용 chart `charts/app`, 앱 저장소용 재사용 workflow `build-app-image.yml`(앱 저장소 자신에 이미지 태그 커밋, 별도 토큰 불필요), `build-one.sh` 분리.
+- `github-runner` role이 organization 러너(`github_runner_repo=<org>`)를 지원.
+- 샘플 앱을 `examples/sample-hello-nestjs`(앱 저장소 시작 템플릿)로 이동, `build-images.yml`과 `environments.json`의 `build` 키 제거.
+- `proxmox`, `proxmox-servers`의 `gateway`, `server_ip_addresses` 기본값 제거(필수 변수화). `scripts/set-repo-url.sh` 추가.
 
-`tofu apply`가 qemu 프로세스의 backing 파일(`*-base.qcow2`) open에서 `Permission denied`로 막혔던
-문제는 **원인을 찾았다**: AppArmor. `virsh pool-define-as`로 storage pool을 CLI에서 직접 만들면,
-libvirt가 VM마다 자동 생성하는 AppArmor 화이트리스트(`/etc/apparmor.d/libvirt/libvirt-<uuid>.files`)에
-그 pool 볼륨 경로가 누락된다(virt-aa-helper가 pool 기반 볼륨 경로를 못 채움). devbox에서는
-`qemu.conf`에 `security_driver = "none"` 추가로 우회 — **이건 devbox 환경 설정일 뿐 모듈 코드 문제가
-아니라서 코드 변경은 없음** (자세한 내용/재현 조건은 `docs/onboarding.md` "자주 막히는 지점" 참고,
-실제 서버에서도 pool을 CLI로 만들면 동일하게 재현될 수 있음).
+### 다음 할 일
 
-이 수정 후 `tofu apply`로 domain 생성·기동까지는 성공했다(`efi-virtio.rom` 누락 문제도 `ipxe-qemu`
-설치로 해결). 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 30분 넘게 기다려도
-DHCP IP를 못 받을 만큼 느렸다 — devbox 자체의 근본적 한계(Apple Silicon은 중첩 가상화 미지원)라 여기서
-검증을 중단했다. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없을 것으로 예상된다.**
-
-**`github-runner` role은 과거 lima에서 실제 등록·동작까지 검증됐다**(fine-grained PAT로 컨테이너 러너 등록,
-`libicu74` 등 .NET 의존성 직접 설치로 crash-loop 해결, `--net host`로 k3s API 접근). 이후 `deploy.yml`의 lima
-편입은 CI 대상 환경을 `CI_ENVIRONMENTS` 변수로 지정하는 방식으로 바뀌면서 제거됐다.
-
-**Proxmox 홈서버(10.77.0.100) 편입 (2026-09-30)**: `compute-proxmox` 모듈과 `proxmox` 환경을
-추가했다(`bpg/proxmox`, cloud-init 템플릿 clone + 고정 IP). 2026-10-18에 실제 apply, k3s+ArgoCD 부트스트랩, `root-proxmox.yaml` 적용 후 샘플 앱 Healthy까지 검증 완료
-(템플릿 9000, VM .122 — .121은 기존 사용 중이라 .122 사용, 노드명 `hzn`, datastore `local-lvm`).
-러너/CI 편입·이미지 빌드 자동화까지 완료(아래 TODO 참고). 절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md). 같은 노드에 Steam VM(.120)/NPM CT(.110)가 있어 k3s VM은 IP 규칙(CT 110번대, VM 120번대)에 따라 기본 단일 노드로 시작한다. 이에
-따라 macOS 로컬 배포는 불필요해져 Lima VM 3개, `lima`/`socket_vmnet` brew 패키지, GitHub runner
-`lima` 등록을 제거했고, 2026-10-18에 `compute-lima`/`lima` 환경 코드와 관련 문서·워크플로 분기도 삭제했다.
-
-**범용 서버(VM/CT) 찍어내기 (2026-11-26, CT 템플릿 9100 플레이북은 실환경 실행 성공, `proxmox-servers` tofu apply는 미검증)**:
-프로젝트 본래 목적(EC2처럼 서버를 코드로 하나씩 생성)에 맞춰 k3s와 무관한 서버를 만드는 경로를 추가했다.
-`proxmox-lxc-template` 롤(CT 템플릿 9100: Ubuntu 26.04 + docker + compose + git, unprivileged + nesting/keyctl),
-`compute-proxmox-lxc` 모듈, `proxmox-servers` 환경(`vms`/`containers` map, state는 `proxmox`와 분리).
-절차는 [docs/new-site-checklist.md](./docs/new-site-checklist.md)의 "범용 서버" 절. 남은 검증: 테스트 VM+CT
-apply 후 `docker run hello-world`(사용자 확인 후 진행). 이 호스트는 root SSH 로그인을 막아 둬서 플레이북은
-`-u hzn -K`(sudo 비밀번호 입력)로 실행한다.
-
-다음 세션에서 필요할 때 진행할 것:
-
-- [x] `proxmox` CI 편입 완료 (2026-10-18) — `.github/environments.json` 메타데이터 기반 매트릭스, proxmox는
-      `tofu_apply:false`/`plan:false`/`inventory:dynamic`(ansible 단계만 CI, tofu는 사람이 실행). 러너(라벨
-      `proxmox`) 설치·등록, `CI_ENVIRONMENTS=["proxmox"]` 설정 후 `ansible/**` push로 `deploy` job success 확인
-      (run 39111205711). 주의: k3s 재시작 시 러너가 같이 내려가 job이 끊길 수 있음(`Requires=k3s.service`)
-  - 선택: 원격 tfstate backend(MinIO/S3) 도입 시 `tofu_apply`/`plan`을 `true`로 전환
-- [x] 앱 이미지 빌드 자동화(`build-images.yml`) 검증 완료 (2026-10-20, run 39342489086): `apps/sample-hello-nestjs/src`
-      변경 push → proxmox 러너가 빌드 → 로컬 레지스트리(`<노드IP>:5000`)에 sha 태그 push → `values-proxmox.yaml`
-      태그 커밋 → ArgoCD 배포 → 응답 메시지 변경 확인. 참고: 러너 재적용 직후 첫 job이 구 세션에 걸려 queued로 멈출 수
-      있음(취소 후 재실행으로 해결). 간헐적으로 Mac에서 노드 6443 접속이 `no route to host`가 났으나 곧 복구(네트워크 일시 문제)
-
-- [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply — 원격 tfstate 백엔드(S3+DynamoDB/GCS/Storage
-      Account) 생성. 실비용 발생, 버킷/스토리지 계정 이름은 전역 유일해야 함
-      (`terraform.tfvars.example` 참고). **실제 실행은 사용자가 직접** — 클라우드 비용/자격증명이
-      걸려 있어 Claude가 자동으로 apply하지 않는다
-- [x] GitHub 저장소에 Actions 시크릿/변수 등록 — `SSH_PRIVATE_KEY`(로컬 환경이 쓰는
-      `~/.ssh/iac_multicloud_local`과 동일 키)/`SSH_USERNAME`("ubuntu") 등록 완료.
-      과거 `lima`의 `deploy.yml` job이 success로 통과함 (run 33501442246, 2026-09-01). aws/gcp/azure 자격증명은 아직 미등록 — 클라우드 진행 여부 결정 후 등록
-  - secrets 남은 것: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`,
-    `AZURE_CREDENTIALS`
-  - vars 남은 것: `CI_ENVIRONMENTS`(자동 plan/apply 대상, 미설정이면 CI는 아무 환경도 실행하지 않음), `ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_BUCKET_AWS`,
-    `TF_STATE_LOCK_TABLE_AWS`, `TF_STATE_BUCKET_GCP`, `TF_STATE_RG_AZURE`, `TF_STATE_ACCOUNT_AZURE`
-- [ ] `libvirt`용 실제 Linux/libvirtd 호스트 확보 — 현재 범위 밖. macOS(Lima VM devbox)로는
-      TCG 소프트웨어 에뮬레이션이라 부팅이 극도로 느려 완전한 검증이 비현실적임을 확인함
-      (docs/architecture.md 5절). 확보되면 (1) `ansible-playbook ... --tags github-runner`로 러너
-      설치·검증 (2) 리포지토리 변수 `CI_ENVIRONMENTS`에 `libvirt` 추가 (러너 없이 지정하면
-      concurrency 그룹 대기로 push가 막히므로 러너 준비 후에만)
-- [ ] 클라우드 3곳(aws/gcp/azure)에 실제 apply/ansible 부트스트랩 → ArgoCD 기동 확인. 현재 보류
-      (사용자가 클라우드 사용을 나중으로 미룸)
-- [ ] 위 항목들 완료 후 각 신규 클러스터에 `argocd/bootstrap/root-{env}.yaml` 1회 적용해 GitOps
-      루프 실제 동작 확인 (`docs/onboarding.md` 참고). proxmox는 2026-10-18에 적용·검증됨
+- [ ] **앱 배포 구조 실환경 검증**: (1) `argocd` 네임스페이스에 `github-token` Secret 생성 (2) `hznlabs` organization 러너 설치 (`admin:org` PAT, Runner group이 public 저장소를 허용하는지 확인) (3) `examples/sample-hello-nestjs`로 앱 저장소를 만들어 topic 부여 후 push → ArgoCD 배포 확인. 구 샘플 Application이 prune되면 finalizer가 없어 워크로드가 남을 수 있으므로 `kubectl delete ns sample-hello-nestjs`로 정리한다. 절차는 `docs/adding-an-app.md`.
+- [ ] 범용 서버 안에서 `docker run hello-world` 확인 (사용자 확인 후 진행)
+- [ ] `opentofu/bootstrap/{aws,gcp,azure}` 실제 apply (원격 tfstate 백엔드). 실비용과 전역 유일 이름이 걸려 있어 **사용자가 직접 실행**한다. Claude가 자동으로 apply하지 않는다.
+- [ ] GitHub Actions 클라우드 자격증명 등록 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GCP_SERVICE_ACCOUNT_KEY`, `AZURE_CREDENTIALS`)과 vars(`ALLOWED_SSH_CIDRS`, `AWS_AMI_ID`, `GCP_PROJECT_ID`, `TF_STATE_*`). 이미 등록된 것은 `SSH_PRIVATE_KEY`, `SSH_USERNAME`이다. `CI_ENVIRONMENTS`는 러너가 준비된 환경만 지정한다.
+- [ ] 클라우드 3곳 실제 apply와 ansible 부트스트랩 → ArgoCD 기동 확인. 사용자가 클라우드 사용을 나중으로 미뤄 보류 중이다.
+- [ ] `libvirt`용 실제 Linux/libvirtd 호스트 확보. Apple Silicon의 Lima VM은 KVM이 없어 TCG로만 동작하고 부팅이 극도로 느려(30분+ IP 미할당) 검증이 비현실적이었다. `domain_type` 변수와 cloud-init scsi 버스 수정, AppArmor 원인 분석은 완료했다(`docs/onboarding.md`). 호스트를 확보하면 러너 설치 후 `CI_ENVIRONMENTS`에 추가한다.
+- [ ] (선택) 원격 tfstate backend(MinIO/S3) 도입 시 proxmox의 `tofu_apply`/`plan`을 `true`로 전환
+- [ ] (선택) 컨트롤 플레인 이중화(embedded etcd) 구현. 지금 k3s role은 서버 1대만 지원한다.

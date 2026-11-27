@@ -1,22 +1,54 @@
 # 신규 앱 추가 절차
 
-인프라 코드는 건드릴 필요가 없다 (설계 원칙 5: 앱 비의존성). 앱마다 chart를 만들 필요도 없다 —
-범용 chart `charts/app`이 이미지/포트/env/ingress를 values로 받아 Deployment·Service·Ingress를 만든다.
-`apps/sample-hello-nestjs`를 실제 예시로 두고 따라 하면 된다.
-
-## 1. values 작성
+**앱 저장소에 `deploy/values-<env>.yaml`만 두면 이 인프라 저장소를 수정하지 않고 배포된다.**
+ArgoCD가 GitHub organization(`hznlabs`)에서 대상 저장소를 직접 찾고, 이 저장소의 범용 chart
+`charts/app`으로 배포한다. 앱마다 chart를 만들 필요도 없다.
 
 ```
-apps/<app-name>/
-├── Dockerfile / src/ ...    # (선택) 소스. 별도 레포로 분리하려면 6절 참고
-├── values.yaml              # 앱 공통 값 (선택)
-└── values-<env>.yaml        # 배포할 환경마다 하나 (aws/gcp/azure/libvirt/proxmox)
+앱 저장소 (hznlabs/my-app, topic: homelab-app)        이 인프라 저장소 (iac-multicloud)
+├── src/, Dockerfile                                 ├── charts/app/                 범용 chart
+├── deploy/                                          └── argocd/apps/appset-<env>.yaml
+│   ├── values.yaml            (선택, 공통)                  └─ organization을 조회해 앱 자동 발견
+│   └── values-proxmox.yaml    (환경별, 이 파일이 배포 선언)
+└── .github/workflows/deploy.yml   재사용 workflow 호출
 ```
+
+## 0. 최초 1회: 클러스터 준비
+
+앱을 처음 연결하기 전에 한 번만 한다.
+
+1. **ArgoCD가 organization을 조회할 토큰**(fine-grained PAT, 해당 organization 저장소 읽기:
+   Contents/Metadata read)을 Secret으로 등록한다.
+   ```bash
+   kubectl -n argocd create secret generic github-token --from-literal=token=<PAT>
+   ```
+2. **private 앱 저장소**를 쓰면 ArgoCD가 clone할 자격증명도 등록한다 (public이면 불필요).
+   ```bash
+   kubectl -n argocd create secret generic repo-creds-hznlabs \
+     --from-literal=type=git --from-literal=url=https://github.com/hznlabs \
+     --from-literal=username=x --from-literal=password=<PAT>
+   kubectl -n argocd label secret repo-creds-hznlabs argocd.argoproj.io/secret-type=repo-creds
+   ```
+3. **organization 러너**를 k3s 노드에 설치한다 (조직의 모든 저장소가 하나를 공유).
+   PAT에 `admin:org` 권한이 필요하다.
+   ```bash
+   ansible-playbook ... --tags github-runner \
+     -e github_runner_repo=hznlabs -e github_runner_build_tools_enabled=true
+   ```
+   organization 설정의 Runner groups에서 이 러너 그룹이 대상 저장소(public 포함)를 허용하는지 확인한다.
+   기본 그룹은 public 저장소를 허용하지 않는다.
+
+## 1. 앱 저장소 만들기
+
+`examples/sample-hello-nestjs`가 그대로 복사해 쓸 수 있는 시작점이다.
+
+1. `hznlabs` 아래에 저장소를 만든다. **저장소 이름이 곧 앱 이름**이다 (이미지 이름, k8s namespace,
+   release 이름). 소문자, 숫자, 하이픈만 쓴다.
+2. 저장소에 topic **`homelab-app`** 을 붙인다 (About 옆 톱니바퀴).
+3. `deploy/values-<env>.yaml`을 만든다 (배포할 환경마다 하나: `proxmox` 등). 이 파일이 있어야 그 환경에 배포된다.
 
 ```yaml
-# values.yaml 예시
-image:
-  repository: my-app        # build-images.yml이 values-<env>.yaml 에 <노드IP>:5000/my-app + sha 태그를 자동 기입
+# deploy/values.yaml (공통, 선택)
 service:
   targetPort: 3000          # 컨테이너 포트 (환경변수 PORT 로도 주입됨)
 probes:
@@ -28,43 +60,56 @@ ingress:
   host: my-app.example.com
 ```
 
-사용할 수 있는 키 전체는 `charts/app/values.yaml` 참고. 로컬 검증:
-
-```bash
-helm lint charts/app -f apps/<app>/values.yaml -f apps/<app>/values-<env>.yaml
-helm template <app> charts/app -f apps/<app>/values.yaml -f apps/<app>/values-<env>.yaml
+```yaml
+# deploy/values-proxmox.yaml (환경별)
+replicaCount: 1
+# image.repository/tag 는 CI가 빌드 후 이 파일에 기록한다
 ```
 
-범용 chart로 표현이 안 되는 앱(StatefulSet, CronJob 등)은 5/6절처럼 별도 chart를 두고
-`argocd/apps/<app>-<env>.yaml`에 Application을 직접 작성하면 된다 (`directory.include` 글롭이 인식).
+사용할 수 있는 키 전체는 이 저장소의 `charts/app/values.yaml` 참고. 로컬 검증:
 
-## 2. 등록은 자동 (ApplicationSet)
+```bash
+helm template <app> <인프라 저장소>/charts/app -f deploy/values.yaml -f deploy/values-proxmox.yaml \
+  --set image.repository=x --set image.tag=y
+```
 
-`argocd/apps/appset-<env>.yaml`(환경당 1개)의 git files generator가 `apps/*/values-<env>.yaml`을
-찾아 앱마다 Application(`<app>-<env>`, namespace `<app>`)을 만든다. **`values-<env>.yaml` 파일을
-추가해 push하면 끝**이고, Application 매니페스트는 쓰지 않는다. 앱을 내리려면 그 파일을 지운다
-(`prune`으로 정리됨).
+## 2. 빌드 workflow 추가
 
-## 3. bootstrap은 수정 불필요
+앱 저장소에 `.github/workflows/deploy.yml`을 둔다 (`examples/sample-hello-nestjs/.github/workflows/deploy.yml`).
 
-`argocd/bootstrap/root-<env>.yaml`은 `directory.include: "*-<env>.yaml"` 글롭으로
-`argocd/apps/` 안의 `appset-<env>.yaml`(과 직접 작성한 Application)을 가져온다.
-클러스터당 1회 적용한 뒤로는 수정할 일이 없다. 다음 git polling 주기(기본 3분)에 새 앱을 인식한다.
+```yaml
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["deploy/**"]
+jobs:
+  build:
+    permissions:
+      contents: write
+    uses: gjwnssud/iac-multicloud/.github/workflows/build-app-image.yml@main
+    with:
+      environment: proxmox
+      infra_repo: gjwnssud/iac-multicloud
+```
 
-## 4. 컨테이너 이미지
+별도 토큰은 필요 없다. push하면 organization 러너가 이미지를 빌드해
+`<k3s서버IP>:5000/<앱이름>:<git sha>`로 로컬 레지스트리에 올리고, 앱 저장소 자신의
+`deploy/values-<env>.yaml`에 이미지 태그를 커밋한다 (`.github/workflows/build-app-image.yml`,
+`.github/scripts/build-one.sh`). `@main` 대신 태그(`@v1`)로 고정하면 workflow 변경의 영향을 통제할 수 있다.
 
-이 저장소의 인프라 CI(`plan.yml`/`deploy.yml`)는 이미지 빌드를 하지 않는다. 대신 `apps/<app>/`에
-`Dockerfile`이 있으면 `.github/workflows/build-images.yml`이 소스 변경(chart 제외) push 때
-`.github/environments.json`에서 `"build": true`인 환경의 self-hosted runner에서 이미지를 빌드한다.
+## 3. 배포는 자동
 
-1. 러너가 nerdctl/buildkit으로 이미지를 빌드해 그 노드의 로컬 레지스트리(`localhost:5000`)에 `<git sha 7자리>` 태그로 push
-2. `apps/<app>/values-<env>.yaml`의 `image.repository`(`<노드IP>:5000/<app>`)/`image.tag`를 갱신해 커밋
-3. ArgoCD가 git을 polling해서 새 태그를 배포 (CI는 클러스터에 접근하지 않음)
+ArgoCD ApplicationSet이 3분마다 organization을 조회한다 (`requeueAfterSeconds: 180`).
+조건은 topic `homelab-app` + `deploy/values-<env>.yaml` 존재이고, 만족하면 Application
+`<앱이름>-<env>`가 만들어져 배포된다. 앱 코드를 push하면 위 2단계가 새 태그를 커밋하고
+ArgoCD가 롤아웃한다.
 
-조건: 환경에 `values-<env>.yaml`이 있어야 하고, 러너가 `github_runner_build_tools_enabled: true`로
-설치돼 있어야 한다. 앱을 별도 저장소로 분리하는 경우에는 그 저장소 CI에서 같은 방식으로 빌드·push하면 된다.
+- **앱 내리기**: topic을 떼거나 `deploy/values-<env>.yaml`을 지우면 Application이 사라지고
+  `resources-finalizer`로 워크로드도 함께 정리된다.
+- **환경별 선택**: `deploy/values-<env>.yaml`을 둔 환경에만 배포된다.
+- **인프라 저장소는 수정하지 않는다.** 환경 추가는 `argocd/apps/appset-<env>.yaml`(환경당 1개) 몫이다.
 
-## 5. 로컬 클러스터로 실제 확인 (선택)
+## 4. 로컬 클러스터로 실제 확인 (선택)
 
 `ansible/roles/k3s`가 k3s 설치 시 `nerdctl`(+ `buildkitd`)을 함께 설치하고,
 k3s의 containerd 소켓에 붙도록 `buildkit.service`를 구성해둔다. 별도로 Docker
@@ -73,18 +118,18 @@ k3s가 떠 있는 노드라면 바로 다음이 된다:
 
 ```bash
 # proxmox 예시 - k3s의 containerd 네임스페이스로 바로 빌드
-scp -r apps/<app-name> <node>:~/
+scp -r <앱 저장소 디렉터리> <node>:~/<app-name>
 ssh <node> "cd <app-name> && sudo nerdctl --namespace k8s.io \
   --address /run/k3s/containerd/containerd.sock build -t <app-name>:latest ."
 
 helm upgrade --install <app-name> charts/app \
-  -f apps/<app-name>/values.yaml \
-  -f apps/<app-name>/values-proxmox.yaml \
+  -f deploy/values.yaml \
+  -f deploy/values-proxmox.yaml \
   --set image.pullPolicy=IfNotPresent \
   -n <app-name> --create-namespace
 ```
 
-`sample-hello-nestjs`를 이 방식으로 검증한 절차와 동일하다.
+`examples/sample-hello-nestjs`를 이 방식으로 검증한 절차와 동일하다.
 
 ### 왜 nerdctl이 k3s의 containerd 소켓에 직접 붙는가
 
@@ -107,52 +152,13 @@ helm upgrade --install <app-name> charts/app \
   소켓/네임스페이스를 보게 띄워두고 `nerdctl build`가 그 buildkitd를 호출하는
   구조다.
 
-## 6. 앱 소스를 별도 레포에 두는 경우 (권장)
+## 5. 범용 chart로 표현이 안 되는 앱
 
-실서비스 앱은 이 저장소(인프라) 안에 두지 않는다. **앱 레포는 소스와 Dockerfile만**, 이 저장소는
-`apps/<app>/values-<env>.yaml`(배포 설정) 한 파일만 갖는다. chart는 범용 `charts/app`을 그대로 쓴다.
+StatefulSet, CronJob 등은 앱 저장소에 자체 chart를 두고, 이 저장소 `argocd/apps/<app>-<env>.yaml`에
+Application을 직접 쓴다 (`source.repoURL`/`path`를 앱 저장소로 지정, root Application이
+`*-<env>.yaml` 글롭으로 인식). 이 경우만 이 저장소를 수정한다. private이면 0절 2번 자격증명이 필요하다.
 
-```
-앱 레포 (my-web-app)                          인프라 저장소 (iac-multicloud)
-├── src/, Dockerfile                         └── apps/my-web-app/
-└── .github/workflows/deploy.yml  ──CI──▶        └── values-proxmox.yaml   (image.tag는 CI가 갱신)
-     (재사용 workflow 호출)
-```
+## 6. 외부 접속
 
-1. **인프라 저장소에 배포 선언**: `apps/<app>/values-<env>.yaml`을 만든다(포트, env, ingress 등. 1절 참고).
-   이 파일이 있어야 ApplicationSet이 배포하고, 이미지 태그 갱신 대상이 된다. `image`는 CI가 채운다.
-2. **앱 레포용 러너**: k3s 노드에 앱 레포용 self-hosted runner를 설치한다
-   (`ansible-playbook ... --tags github-runner -e github_runner_repo=<owner>/<app> -e github_runner_build_tools_enabled=true`).
-3. **토큰**: 인프라 저장소에 push할 수 있는 fine-grained PAT(Contents: write)를 앱 레포 secret
-   `INFRA_REPO_TOKEN`으로 등록한다.
-4. **앱 레포 workflow**:
-
-```yaml
-# 앱 레포 .github/workflows/deploy.yml
-on:
-  push:
-    branches: [main]
-jobs:
-  build:
-    uses: <owner>/<infra-repo>/.github/workflows/build-app-image.yml@main
-    with:
-      app: my-web-app            # = apps/<app>/ 디렉토리명 = 이미지 이름
-      environment: proxmox
-      infra_repo: <owner>/<infra-repo>
-    secrets:
-      infra_token: ${{ secrets.INFRA_REPO_TOKEN }}
-```
-
-push하면 앱 레포 러너가 이미지를 빌드해 `<k3s서버IP>:5000/<app>:<git sha>`로 로컬 레지스트리에 push하고,
-인프라 저장소 `values-<env>.yaml`의 `image.repository/tag`를 커밋한다. 이후는 ArgoCD가 polling으로 롤아웃한다
-(`.github/workflows/build-app-image.yml`, `.github/scripts/build-one.sh`).
-
-5. **외부 접속**: k3s 내장 Traefik이 노드의 80/443을 받는다. `values-<env>.yaml`에 `ingress.host`를 두고,
-   Nginx Proxy Manager(CT)에서 해당 도메인을 `<k3s노드IP>:80`으로 포워딩한다.
-
-> 범용 chart로 표현이 안 되는 앱(StatefulSet, CronJob 등)만 앱 레포에 자체 chart를 두고
-> `argocd/apps/<app>-<env>.yaml`에 Application을 직접 쓴다 (`source.repoURL`/`path`를 앱 레포로 지정,
-> private이면 ArgoCD에 저장소 자격증명 등록). 이 경우 이미지 태그 갱신은 앱 레포 CI가 자체 values를 커밋한다.
-
-> 이 저장소 안 `apps/<app>/`에 소스(Dockerfile)를 두는 방식(`sample-hello-nestjs`)은 파이프라인 검증과
-> 아주 작은 앱용이다. 4절의 `build-images.yml`이 처리한다.
+k3s 내장 Traefik이 노드의 80/443을 받는다. `deploy/values-<env>.yaml`에 `ingress.host`를 두고,
+Nginx Proxy Manager(CT)에서 해당 도메인을 `<k3s노드IP>:80`으로 포워딩한다.

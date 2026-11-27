@@ -1,144 +1,143 @@
 # 아키텍처 가이드
 
-OpenTofu → Ansible → k3s → ArgoCD 로 이어지는 배포 파이프라인 전체를 그림과 용어집으로 정리한다.
-사설망 환경(proxmox/libvirt)과 self-hosted runner(`ansible/roles/github-runner`)가 어디에 끼워지는지 위주로 본다.
+이 저장소에는 서로 다른 두 흐름이 있다. 서버를 만드는 **인프라 흐름**(push 기반)과, 앱을 올리는 **배포 흐름**(pull 기반)이다.
+둘을 구분해서 보면 구조가 단순해진다. 도구가 낯설면 [tech-stack.md](./tech-stack.md)를 먼저 본다.
 
-## 1. 큰 그림 — pull 기반 GitOps
-
-CI(GitHub Actions)는 **인프라**(VM/클러스터 생성, k3s+ArgoCD 부트스트랩)까지만 담당한다. 앱 배포는 각
-클러스터에 독립 설치된 ArgoCD가 git 저장소를 직접 polling해서 처리한다 — CI가 클러스터로 push할 필요가
-없는 구조다.
+## 1. 두 가지 흐름
 
 ```mermaid
 flowchart LR
-  subgraph CI["GitHub Actions"]
-    PR["PR: tofu plan + OPA 검증"]
-    MERGE["main merge:\ntofu apply + ansible-playbook"]
+  subgraph INFRA["인프라 흐름 (사람 또는 CI가 실행)"]
+    tofu["OpenTofu<br/>VM/CT 생성"]
+    ans["Ansible site.yml<br/>k3s + 레지스트리 + ArgoCD"]
+    tofu --> ans
   end
-  subgraph CLUSTER["클러스터 (aws / gcp / azure / local)"]
-    K3S["k3s\n(containerd 내장)"]
-    ARGO["ArgoCD"]
-    APP["앱 Pod\n(Helm chart)"]
+  subgraph DEPLOY["배포 흐름 (ArgoCD가 pull)"]
+    app["앱 저장소 push"] --> ci["러너가 이미지 빌드<br/>태그 커밋"]
+    ci --> argo["ArgoCD가 감지해 적용"]
   end
-  GIT[("git 저장소\napps/, argocd/apps/")]
-
-  PR -.검증만.-> MERGE
-  MERGE -->|"인프라 생성 +\nk3s/ArgoCD 부트스트랩"| K3S
-  K3S --> ARGO
-  ARGO -->|"3분 간격 polling"| GIT
-  ARGO -->|"helm install/upgrade"| APP
+  ans -. "한 번 설치하면 이후 자동" .-> argo
 ```
 
-**포인트.** CI는 화살표가 클러스터로 *들어가는* 방향(push)이 아니라, ArgoCD가 git을 *당겨오는*(pull)
-방향이다. 그래서 로컬/사설망 클러스터에 외부에서 접근 가능한 포트를 열어둘 필요가 없다.
+| | 인프라 흐름 | 배포 흐름 |
+|---|---|---|
+| 하는 일 | VM/CT 생성, k3s·ArgoCD 설치 | 앱 이미지 빌드, 클러스터에 반영 |
+| 방향 | push (SSH/API로 서버에 접근) | pull (ArgoCD가 git을 조회) |
+| 실행 주체 | 사람, 또는 `deploy.yml`(self-hosted runner) | GitHub Actions 러너 + ArgoCD |
+| 빈도 | 사이트 구축, 노드 추가 때 | 앱 push마다 |
+| 사설망 문제 | 있음 (GitHub 러너가 못 들어옴) | 없음 (클러스터가 밖으로 나가 조회) |
 
-> **주의.** 이 pull 방식은 **앱 배포**에만 적용된다. VM 생성이나 k3s 설치 같은 **인프라 변경**은 여전히
-> CI(또는 사람)가 클러스터 쪽으로 SSH/API 호출을 해야 하는 push 방식이다 — 이게 2, 3절에서 나오는
-> 문제의 출발점이다.
+## 2. 인프라 흐름
 
-## 2. 사설망 클러스터 — 호스트/게스트 경계
+### 구성 요소와 책임
 
-proxmox/libvirt 같은 로컬 환경은 **하이퍼바이저 호스트**와 그 위의 **게스트 VM(k3s 노드)**이 분리된 두
-실행 공간이다. VM은 사설망 안에 있어 GitHub 호스팅 러너가 직접 들어갈 수 없다.
+| 단계 | 도구 | 책임 |
+|---|---|---|
+| 1 | OpenTofu (`opentofu/environments/<env>`) | VM/CT 생성. 완료 후 Ansible inventory(`hosts.ini`) 자동 생성 |
+| 2 | Ansible `common` | 패키지, 타임존, 비밀번호 없는 sudo, UFW(SSH 허용, 기본 deny) |
+| 3 | Ansible `k3s` | k3s server/agent 설치, UFW 포트(6443, 10250, 8472/udp), nerdctl-full + buildkitd(k3s containerd 소켓), kubeconfig를 `ansible/fetched/`로 가져옴 |
+| 4 | Ansible `registry` | 서버 노드에 로컬 레지스트리(:5000, nerdctl+systemd), 모든 노드에 `registries.yaml` mirror 설정 |
+| 5 | Ansible `argocd` | Helm 설치 후 ArgoCD 설치. 초기 admin 비밀번호 출력 |
+| 선택 | Ansible `github-runner` | self-hosted runner 컨테이너 (`--tags github-runner`로만 실행) |
 
-```mermaid
-flowchart TB
-  GH["GitHub Actions\n(github.com)"]
+`site.yml`은 1~5단계를 순서대로 처리하고, 러너는 명시할 때만 설치한다. ArgoCD는 **클러스터마다 독립으로** 설치한다(hub-and-spoke 아님).
+그래서 로컬 클러스터에 외부에서 접근할 필요가 없다. 설치 후 `argocd/bootstrap/root-<env>.yaml`을 클러스터당 한 번 적용하면 GitOps가 시작된다.
 
-  subgraph HOST["하이퍼바이저 호스트 (Proxmox / libvirtd)"]
-    API["Proxmox API / libvirtd"]
-  end
+### 환경
 
-  subgraph VM["게스트 VM · 사설망"]
-    SRV["k3s server\nArgoCD, local registry"]
-    AGT["k3s agent"]
-    SRV <--> AGT
-  end
+| 환경 | 대상 | 비고 |
+|---|---|---|
+| `proxmox` | Proxmox 홈서버의 k3s 노드 VM | cloud-init 템플릿 clone, 고정 IP. **검증 완료** |
+| `proxmox-servers` | k3s와 무관한 범용 VM/CT | `vms`/`containers` map. state가 `proxmox`와 분리됨 |
+| `libvirt` | Linux KVM 호스트의 VM | 코드만 작성됨, 실제 호스트 미확보 |
+| `aws` / `gcp` / `azure` | 클라우드 VM + k3s | 코드만 작성됨, 원격 state 백엔드 필요 |
 
-  API -->|"VM 생성/삭제 (tofu apply)"| SRV
-  API -->|"VM 생성/삭제 (tofu apply)"| AGT
-  GH -.차단됨: 사설망 도달 불가.-x SRV
-```
+provider 모듈은 입출력 이름을 통일해서(`network_id`/`subnet_id`, `instance_id`/`instance_ip`) `environments/` 층에서만 provider를 바꾼다.
+클라우드 환경은 원격 backend를 쓴다. 로컬 backend를 쓰면 CI의 일회용 러너가 매번 state를 잃어 리소스가 중복 생성되기 때문이다.
 
-## 3. self-hosted runner
+### CI
 
-GitHub이 못 들어오는 사설망 안에, 반대로 **바깥으로 나가는** 연결을 만드는 게 self-hosted runner다.
-게스트 VM 안에 컨테이너로 러너를 띄우면, 러너가 GitHub에 job을 *요청*하러 나가기 때문에 인바운드 포트
-개방이 필요 없다. 러너는 사설망 안에서 `ansible-playbook`(k3s/ArgoCD 재적용)을 실행하고, 하이퍼바이저가
-원격 API를 제공하면 `tofu apply`까지 대신할 수 있다.
+- `plan.yml`: PR에서 `tofu plan` 후 Conftest(`policy/`)로 검증하고 결과를 PR 코멘트로 남긴다. 정책은 인스턴스 타입 허용 목록과 SSH(22)의 0.0.0.0/0 노출 차단이다.
+- `deploy.yml`: main에 `opentofu/**` 또는 `ansible/**` 변경이 들어가면 `tofu apply` 후 `ansible-playbook`을 실행한다.
+- 대상 환경은 리포지토리 변수 `CI_ENVIRONMENTS`로 지정한다. 환경별 러너 라벨, tofu apply 여부, 인벤토리 방식은 `.github/environments.json`에 있고, 새 환경은 거기에 항목만 추가하면 된다.
+- proxmox는 `tofu_apply: false`, `inventory: dynamic`이다. 러너가 관리 대상 VM 안에서 돌고 tfstate가 로컬이라, CI가 apply하면 state를 잃고 VM을 재생성하려 하기 때문이다. 그래서 VM 생성은 사람이 하고, CI는 이미 떠 있는 클러스터에 `ansible-playbook`만 다시 적용한다. 이때 inventory는 `k3s kubectl get nodes`로 노드 IP를 조회해 매번 만든다.
 
-### libvirt — tofu apply까지 컨테이너 안에서
+## 3. 사설망과 self-hosted runner
 
-`libvirt`는 daemon(libvirtd) + 원격 클라이언트 구조로 설계됐다. `libvirt_uri`를
-`qemu+ssh://user@호스트IP/system`으로 주면 게스트 VM 안의 러너 컨테이너가 네트워크로 물리 호스트의
-libvirtd에 접속해 다른 VM을 만들 수 있다 — 즉 **tofu apply부터 ansible-playbook까지 전부** 이 러너
-하나로 처리 가능하다.
+Proxmox나 libvirt의 VM은 사설망 안에 있어 GitHub 호스팅 러너가 직접 들어갈 수 없다.
+해결책은 반대 방향 연결이다. 사설망 안의 VM에 러너 컨테이너를 띄우면 러너가 GitHub으로 job을 **가져오러 나가므로** 인바운드 포트가 필요 없다.
 
 ```mermaid
 flowchart TB
   GH["GitHub Actions"]
-
-  subgraph HOST["물리 Linux 호스트 (libvirtd)"]
-    LIBVIRTD["libvirtd\n(qemu:///system)"]
+  subgraph HOST["하이퍼바이저 호스트 (Proxmox / libvirtd)"]
+    API["Proxmox API / libvirtd"]
   end
-
-  subgraph VM["k3s server VM (게스트)"]
-    RUNNER["github-runner 컨테이너\n+ libvirt-clients"]
-    SRV["k3s + ArgoCD"]
+  subgraph VM["게스트 VM (사설망)"]
+    RUNNER["github-runner 컨테이너"]
+    SRV["k3s server + ArgoCD + 레지스트리"]
   end
-  AGT["k3s agent VM"]
-
-  GH <-->|"아웃바운드 polling"| RUNNER
-  RUNNER -->|"tofu apply\nqemu+ssh://...(원격, keyfile)"| LIBVIRTD
+  GH <-->|"러너가 아웃바운드로 job 조회"| RUNNER
   RUNNER -->|"ansible-playbook"| SRV
-  RUNNER -->|"ansible-playbook"| AGT
-  LIBVIRTD -.관리.-> VM
-  LIBVIRTD -.관리.-> AGT
+  API -->|"tofu apply (사람이 실행)"| SRV
+  GH -.->|"직접 접근 불가"| SRV
 ```
 
-**결론 (libvirt).** `github_runner_extra_packages: "libvirt-clients"`
-(`ansible/inventories/libvirt/group_vars/all.yml`)로 terraform-provider-libvirt가 필요로 하는
-클라이언트 라이브러리를 러너 컨테이너에 추가 설치하고, `libvirt_uri`를 원격 URI로 override하면 이 환경은
-`deploy.yml` 매트릭스에 그대로 있는 지금 구조(tofu apply + ansible-playbook 한 job)를 그대로 이 러너가
-실행할 수 있다.
+러너 role(`ansible/roles/github-runner`)의 동작은 다음과 같다.
 
-### 지금 상태 — 코드는 있지만 켜져 있지 않음
+- `github_runner_repo`가 `owner/repo`면 **저장소 러너**, `org`처럼 슬래시가 없으면 **organization 러너**로 등록한다. organization 러너는 조직의 모든 저장소가 하나를 공유하므로 앱 저장소가 늘어도 러너를 더 설치하지 않는다 (PAT에 `admin:org` 필요).
+- `github_runner_build_tools_enabled: true`면 러너 컨테이너에 nerdctl, buildkit·containerd 소켓을 마운트해서 이 러너가 이미지를 직접 빌드하고 로컬 레지스트리에 push할 수 있다. k3s가 설치된 노드에서만 켠다.
+- 라벨은 환경 `group_vars`(예: `self-hosted,proxmox`)로 정하고, workflow의 `runs-on`과 일치해야 한다.
+- k3s를 재시작하면 러너가 같이 내려가 진행 중인 job이 끊길 수 있다(`Requires=k3s.service`).
+- 러너가 없는 환경을 `CI_ENVIRONMENTS`에 넣으면 job이 최대 24시간 대기하고, `concurrency` 그룹 때문에 같은 ref의 이후 push가 모두 막힌다. 러너가 Idle인 것을 확인한 뒤에만 지정한다.
 
-role(`ansible/roles/github-runner`)만 저장소에 추가된 상태다. 실제로 켜려면 세 단계가 필요하다
-(libvirt는 실제 대상 Linux/libvirtd 호스트가 아직 없어 보류 중, proxmox는 러너 미설치).
+### libvirt: 러너가 tofu apply까지 처리하는 구조
 
-| 단계 | 실행 위치 | 명령/작업 |
-|---|---|---|
-| 1. PAT 발급 | GitHub 웹 | repo scope 토큰 생성 |
-| 2. 러너 기동 | 대상 호스트 터미널 | `ansible-playbook ... --tags github-runner -e github_runner_repo=... -e github_runner_pat=...` |
-| 3. 등록 확인 | GitHub 웹 | Settings → Actions → Runners에서 `local`/`proxmox` 라벨 확인 |
+libvirt는 daemon과 원격 클라이언트 구조라 `libvirt_uri`를 `qemu+ssh://user@호스트IP/system`으로 주면, 게스트 VM 안의 러너 컨테이너가 물리 호스트의 libvirtd에 접속해 다른 VM을 만들 수 있다.
+`ansible/inventories/libvirt/group_vars/all.yml`이 클라이언트 라이브러리(`libvirt-clients`)를 러너에 추가 설치하도록 설정해 두었다. 실제 Linux/libvirtd 호스트가 없어 아직 검증하지 못했다.
 
-## 4. 용어집
+## 4. 배포 흐름
 
-| 용어 | 설명 | 왜 필요한가 |
-|---|---|---|
-| OpenTofu | Terraform 호환 오픈소스 IaC 도구. VM/클러스터 등 인프라를 코드로 선언. | provider별 입출력 변수명을 통일해 클라우드 교체를 `environments/` 레이어만으로 흡수. |
-| Ansible | SSH로 접속해 서버를 설정하는 구성관리 도구. 이 저장소에서는 k3s 설치·조인, ArgoCD 설치까지만 담당. | 관리형 K8s(EKS 등)는 컨트롤 플레인을 클라우드가 관리해 이 단계가 불필요. |
-| k3s | 경량 Kubernetes 배포판. containerd가 내장돼 있어 별도 Docker 설치가 필요 없음. | 단일 노드부터 시작해 노드만 추가하면 그대로 확장되는 동일 아키텍처 유지. |
-| Helm | Kubernetes 앱 배포 단위(chart). `docker-compose.yml` 대신 앱마다 chart 하나. | 앱 종류(Spring/NestJS 등)에 무관하게 배포 방식을 통일. |
-| ArgoCD / GitOps | 클러스터가 git 저장소를 스스로 polling해 상태를 동기화하는 pull 기반 배포 방식. | CI가 클러스터로 push할 필요가 없어 사설망 인바운드 문제가 원천 해소. |
-| OPA / Conftest | tofu plan 결과(JSON)를 정책(rego)으로 검증하는 도구. PR 단계에서 실행. | 잘못된 설정이 apply되기 전에 PR에서 차단. |
-| tfstate backend | OpenTofu가 리소스 상태를 저장하는 원격 저장소(S3+DynamoDB / GCS / Storage Account). | 여러 사람·CI가 동시에 apply해도 상태가 꼬이지 않게 잠금(lock) 제공. |
-| libvirt | Linux KVM/QEMU를 다루는 가상화 관리 API. daemon(libvirtd)+원격 클라이언트 구조라 `qemu+ssh://`로 네트워크 너머에서도 VM을 관리 가능. 이 저장소의 libvirt 환경 기반. | 원격 관리가 가능해 러너 컨테이너가 게스트 VM 안에서도 tofu apply를 대신 실행할 수 있음. |
-| containerd / nerdctl | k3s에 내장된 컨테이너 런타임과 그 CLI. registry, github-runner 컨테이너도 이 소켓을 재사용. | Docker를 별도로 설치하지 않고 k3s가 이미 가진 런타임만 사용. |
-| self-hosted runner | GitHub Actions job을 GitHub 서버가 아니라 사용자가 지정한 머신에서 실행시키는 에이전트. | GitHub 호스팅 러너가 도달 못 하는 사설망 안에서 job을 실행하기 위해 필요. |
-| SOPS | git에 커밋해도 안전하게 시크릿을 암호화하는 도구 (로컬 환경 계획). | 클라우드는 네이티브 시크릿 매니저, 로컬은 SOPS로 역할 분담. |
+앱 하나가 배포되는 과정이다.
+
+1. 개발자가 앱 저장소(organization 소속, topic `homelab-app`)에 push한다.
+2. 앱 저장소의 workflow가 이 저장소의 재사용 workflow `build-app-image.yml`을 호출한다.
+3. organization 러너가 이미지를 빌드해 같은 노드의 로컬 레지스트리에 `<노드IP>:5000/<앱 저장소 이름>:<git sha 7자리>`로 push한다.
+4. 러너가 앱 저장소의 `deploy/values-<env>.yaml`에 `image.repository`/`image.tag`를 기록하고 앱 저장소에 커밋한다. 앱 저장소 자신에 커밋하므로 별도 토큰이 필요 없다.
+5. 클러스터의 ArgoCD ApplicationSet(`argocd/apps/appset-<env>.yaml`)이 3분마다 organization을 조회한다. topic과 `deploy/values-<env>.yaml` 조건을 만족하는 저장소마다 Application `<저장소>-<env>`를 만든다.
+6. Application은 두 소스를 합친다. chart는 이 저장소의 `charts/app`, values는 앱 저장소의 `deploy/values.yaml`과 `deploy/values-<env>.yaml`이다.
+7. ArgoCD가 Deployment, Service, Ingress를 만들고, 이후 태그가 바뀔 때마다 롤링 업데이트한다. 파드는 레지스트리의 노드 IP 주소로 이미지를 받는다.
+
+```mermaid
+flowchart LR
+  org["organization<br/>topic: homelab-app<br/>deploy/values-env.yaml 있음"]
+  set["ApplicationSet<br/>appset-env.yaml"]
+  appA["Application app-a-env"]
+  appB["Application app-b-env"]
+  chart["charts/app<br/>(이 저장소)"]
+  out["Deployment, Service, Ingress"]
+  org --> set
+  set --> appA
+  set --> appB
+  appA --> out
+  chart --> out
+```
+
+- **앱 내리기**: topic을 떼거나 `deploy/values-<env>.yaml`을 지우면 Application이 사라지고, finalizer(`resources-finalizer`)로 워크로드도 함께 정리된다.
+- **환경 선택**: `deploy/values-<env>.yaml`을 둔 환경에만 배포된다. 환경마다 ApplicationSet이 하나씩 있다.
+- **자동 동기화**: `automated`(prune, selfHeal)라서 git에 적힌 상태가 정답이다. 클러스터에서 손으로 바꾼 것은 되돌려진다.
+- **범용 chart가 안 맞는 앱**: 이 저장소의 `argocd/apps/<app>-<env>.yaml`에 Application을 직접 쓴다. 이때만 이 저장소를 수정한다.
+- **전제 조건**: ArgoCD의 GitHub 토큰 Secret(`github-token`)과 organization 러너. 개인 계정은 ArgoCD SCM Provider가 조회하지 못해서 organization이 필요하다. 절차는 [adding-an-app.md](./adding-an-app.md)에 있다.
 
 ## 5. 현재 상태
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| proxmox 인프라 + k3s + ArgoCD + GitOps(샘플 앱) | 완료·검증됨 (2026-10-18) | `tofu apply` → `site.yml` → `root-proxmox.yaml` 적용 후 샘플 앱 Healthy 확인. 러너 설치·CI deploy·앱 이미지 빌드 자동화까지 검증됨 (2026-10-20) |
-| github-runner role (컨테이너 설치 코드) | 코드 완료 | proxmox에 설치·검증됨(라벨 `proxmox`, 빌드 도구 포함). libvirt에는 아직 설치 안 함 |
-| GitHub Actions 시크릿 등록 (SSH_PRIVATE_KEY/SSH_USERNAME) | 완료 | 클라우드용 시크릿(AWS/GCP/Azure)은 아직 미등록 |
-| libvirt 원격 libvirt_uri + libvirt-clients 설정 | 코드만 | `variables.tf`/`group_vars/all.yml`에 반영됨 |
-| `compute-libvirt` 모듈 — `domain_type`, cloudinit scsi 버스 수정 | 완료·검증됨 | KVM 없는 aarch64 호스트에서 IDE 컨트롤러 미지원 문제 해결. 실제 KVM 호스트에도 안전 |
-| 클라우드(aws/gcp/azure) 부트스트랩 backend | 미실행 | 실비용 발생, 아직 apply 안 함 |
-| libvirt 대상 Linux/libvirtd 호스트 | devbox(Lima VM)로 시험 완료 (부분) | `iac-multicloud-libvirt-devbox`(Apple Silicon, KVM 미지원)에서 `tofu apply`로 domain 생성·기동까지 성공 확인. 원인은 AppArmor였다(아래 참고) — devbox 전용 설정으로 해결, 코드 변경 없음. 다만 KVM 가속이 없어 TCG 소프트웨어 에뮬레이션으로 부팅해야 해서 극도로 느림(30분+ 부팅 대기해도 IP 미할당) — devbox 자체의 근본적 한계라 이 이상 검증하지 않고 중단. **실제 KVM 지원 호스트라면 이 부팅 지연 자체가 없음** |
-| 자동 배포 대상 환경 | 변수로 지정 | 매트릭스를 코드에 고정하지 않고 리포지토리 변수 `CI_ENVIRONMENTS`(JSON 배열)에 적힌 환경만 실행한다. 환경별 러너 라벨/tofu apply 여부/인벤토리 방식은 `.github/environments.json` 메타데이터로 정의한다(기본 빈 값 = 실행 없음). self-hosted runner가 없는 환경을 지정하면 job이 최대 24시간 대기하고, `deploy.yml`의 `concurrency` 그룹 때문에 같은 ref의 새 push가 전부 그 뒤에 줄서서 막히는 걸 실제로 겪었으므로 러너가 준비된 환경만 지정한다 |
-| devbox에서 발견한 host 설정 이슈 (코드 아님) | 해결됨 | (1) `virt-aa-helper`가 수동 생성한 storage pool의 볼륨을 AppArmor 화이트리스트에 못 넣어 디스크 open이 막힘 → devbox는 `security_driver = "none"`으로 우회. 실제 서버에서도 pool을 CLI로 직접 만들면 재현 가능 (2) `efi-virtio.rom` 누락 → `ipxe-qemu` 패키지 필요 (`--no-install-recommends`로 설치 시 빠짐, 일반 설치라면 문제없음) |
+| Proxmox: VM 생성, k3s, 레지스트리, ArgoCD, 러너 | 검증 완료 (2026-10-18~20) | k3s VM `.122`, CI deploy job(ansible)까지 확인 |
+| Proxmox: 범용 CT 템플릿(9100) 생성 | 검증 완료 | 플레이북 실환경 실행 성공, CT 1대 생성(`proxmox-servers`) 확인 |
+| 범용 서버 안에서 docker 실행 | 미검증 | `docker run hello-world` 확인이 남아 있음 |
+| 앱 배포: ApplicationSet(SCM Provider), 범용 chart, 재사용 workflow, organization 러너 | 코드 완료, 실환경 미검증 | 이전 방식(저장소 내 앱, 이미지 빌드 자동화)은 Proxmox에서 검증했으나 현재 방식으로 교체됨 |
+| libvirt | 코드만 | Apple Silicon의 Lima VM(KVM 없음, TCG)로 시험했으나 부팅이 극도로 느려 중단. 실제 KVM 호스트에서 재검증 필요 |
+| aws / gcp / azure | 코드만 | 원격 state 백엔드(`opentofu/bootstrap/*`)와 자격증명이 아직 없음. 실비용이 발생해서 사용자가 직접 실행 |
+
+libvirt 시험에서 확인한 사실은 두 가지다. 모듈은 `domain_type`(KVM 없는 호스트용)과 cloud-init를 일반 disk로 붙이는 수정이 반영돼 있다. 그리고 storage pool을 `virsh pool-define-as`로 직접 만들면 libvirt가 AppArmor 화이트리스트에 볼륨 경로를 넣지 못해 `Permission denied`가 날 수 있다([onboarding.md](./onboarding.md) 참고).
