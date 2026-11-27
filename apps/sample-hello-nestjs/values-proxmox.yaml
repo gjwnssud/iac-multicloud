@@ -1,6 +1,0 @@
-replicaCount: 1
-env:
-  ENVIRONMENT: proxmox
-image:
-  repository: 10.77.0.122:5000/sample-hello-nestjs
-  tag: "bdd775b"

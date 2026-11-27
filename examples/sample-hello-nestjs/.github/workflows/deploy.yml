@@ -1,0 +1,16 @@
+# 앱 저장소용 예시. 이 저장소(iac-multicloud)의 재사용 workflow를 호출해 이미지를 빌드하고
+# deploy/values-<env>.yaml 의 image 태그를 커밋한다. 배포는 ArgoCD가 처리한다.
+# <owner>/<infra-repo> 는 인프라 저장소로 바꾼다. 앱 저장소에는 topic "homelab-app" 이 필요하다.
+name: Deploy
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["deploy/**"]   # values만 바꾼 push는 이미지를 다시 빌드하지 않는다
+jobs:
+  build:
+    permissions:
+      contents: write             # 태그 커밋 push용
+    uses: <owner>/<infra-repo>/.github/workflows/build-app-image.yml@main
+    with:
+      environment: proxmox
+      infra_repo: <owner>/<infra-repo>

@@ -6,8 +6,7 @@
     ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu",
-    "build": false
+    "inventory": "tofu"
   },
   "gcp": {
     "provider": "gcp",
@@ -16,8 +15,7 @@
     ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu",
-    "build": false
+    "inventory": "tofu"
   },
   "azure": {
     "provider": "azure",
@@ -26,8 +24,7 @@
     ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu",
-    "build": false
+    "inventory": "tofu"
   },
   "libvirt": {
     "provider": "local",
@@ -37,8 +34,7 @@
     ],
     "plan": true,
     "tofu_apply": true,
-    "inventory": "tofu",
-    "build": false
+    "inventory": "tofu"
   },
   "proxmox": {
     "provider": "local",
@@ -48,7 +44,6 @@
     ],
     "plan": false,
     "tofu_apply": false,
-    "inventory": "dynamic",
-    "build": true
+    "inventory": "dynamic"
   }
 }

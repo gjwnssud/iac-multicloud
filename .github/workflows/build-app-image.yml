@@ -1,36 +1,30 @@
 name: Build App Image (reusable)
 
-# 외부 앱 저장소가 호출하는 재사용 workflow. 앱 저장소의 CI가 이 workflow를 부르면:
+# 앱 저장소가 호출하는 재사용 workflow. 앱 저장소의 CI가 이 workflow를 부르면:
 #   1) 앱 소스(Dockerfile)를 러너 노드의 k3s containerd로 빌드해 로컬 레지스트리에 push
-#   2) 이 인프라 저장소의 apps/<app>/values-<env>.yaml 의 image.repository/tag 를 커밋으로 갱신
-#   3) 이후 배포는 ArgoCD가 git을 polling해 처리 (CI는 클러스터에 접근하지 않음)
+#   2) 앱 저장소의 deploy/values-<env>.yaml 의 image.repository/tag 를 커밋으로 갱신
+#   3) 이후 배포는 ArgoCD가 처리한다 (클러스터에는 접근하지 않음).
+#      ArgoCD ApplicationSet이 organization에서 topic "homelab-app" + deploy/values-<env>.yaml 이 있는
+#      저장소를 발견해 이 인프라 저장소의 범용 chart(charts/app)로 배포한다.
 #
 # 전제:
-#   - 인프라 저장소에 apps/<app>/values-<env>.yaml 이 먼저 존재해야 한다 (이 파일이 "그 환경에 배포" 선언)
-#   - 앱 저장소에 self-hosted runner가 등록돼 있어야 한다
-#     (ansible-playbook ... --tags github-runner -e github_runner_repo=<owner>/<app> -e github_runner_build_tools_enabled=true)
-#   - 호출 측이 인프라 저장소에 push할 수 있는 토큰(fine-grained PAT, contents:write)을 secret으로 넘긴다
+#   - 앱 저장소에 Dockerfile, deploy/values-<env>.yaml(배포 설정), topic "homelab-app" 이 있다
+#   - 호출하는 job에 permissions: contents: write 가 있다 (태그 커밋 push용, 별도 토큰 불필요)
+#   - 해당 organization에 self-hosted runner가 등록돼 있다
+#     (ansible-playbook ... --tags github-runner -e github_runner_repo=<org> -e github_runner_build_tools_enabled=true)
+#   - 이미지 이름과 k8s 이름은 앱 저장소 이름을 쓴다 (소문자, 숫자, 하이픈)
 #
-# 호출 예시 (앱 저장소의 .github/workflows/deploy.yml) — docs/adding-an-app.md 6절 참고:
-#   jobs:
-#     build:
-#       uses: <owner>/<infra-repo>/.github/workflows/build-app-image.yml@main
-#       with: { app: my-app, environment: proxmox, infra_repo: <owner>/<infra-repo> }
-#       secrets: { infra_token: ${{ secrets.INFRA_REPO_TOKEN }} }
+# 호출 예시는 examples/sample-hello-nestjs/.github/workflows/deploy.yml 참고.
 
 on:
   workflow_call:
     inputs:
-      app:
-        description: 앱 이름 (인프라 저장소의 apps/<app>/ 및 이미지 이름과 동일)
-        required: true
-        type: string
       environment:
-        description: 배포 환경 (values-<environment>.yaml)
+        description: 배포 환경 (deploy/values-<environment>.yaml)
         required: true
         type: string
       infra_repo:
-        description: 인프라 저장소 (owner/repo)
+        description: 이 인프라 저장소 (owner/repo). 빌드 스크립트를 가져오는 용도
         required: true
         type: string
       infra_ref:
@@ -49,14 +43,15 @@ on:
         default: '["self-hosted","proxmox"]'
     secrets:
       infra_token:
-        required: true
+        description: 인프라 저장소가 private일 때만 필요 (읽기 전용 토큰)
+        required: false
 
 jobs:
   build:
     runs-on: ${{ fromJSON(inputs.runs_on) }}
-    # 같은 앱·환경의 빌드가 동시에 인프라 저장소에 push하지 않도록 직렬화
+    # 같은 앱·환경의 빌드가 동시에 values를 커밋하지 않도록 직렬화
     concurrency:
-      group: build-app-image-${{ inputs.infra_repo }}-${{ inputs.app }}-${{ inputs.environment }}
+      group: build-app-image-${{ github.repository }}-${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,31 +61,30 @@ jobs:
         with:
           repository: ${{ inputs.infra_repo }}
           ref: ${{ inputs.infra_ref }}
-          token: ${{ secrets.infra_token }}
+          token: ${{ secrets.infra_token || github.token }}
           path: infra
 
       - name: 이미지 빌드/push + values 갱신
         env:
-          APP: ${{ inputs.app }}
+          APP: ${{ github.event.repository.name }}
           ENVIRONMENT: ${{ inputs.environment }}
           CONTEXT: ${{ inputs.context }}
           SHA: ${{ github.sha }}
         run: |
           infra/.github/scripts/build-one.sh "$APP" "app-src/$CONTEXT" \
-            "infra/apps/$APP/values-$ENVIRONMENT.yaml" "$SHA"
+            "app-src/deploy/values-$ENVIRONMENT.yaml" "$SHA"
 
       - name: image.tag 변경 커밋/push
-        working-directory: infra
+        working-directory: app-src
         env:
-          APP: ${{ inputs.app }}
           ENVIRONMENT: ${{ inputs.environment }}
-          INFRA_REF: ${{ inputs.infra_ref }}
+          BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
-          git diff --quiet -- apps && { echo "변경 없음"; exit 0; }
+          git diff --quiet -- deploy && { echo "변경 없음"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "apps/$APP/values-$ENVIRONMENT.yaml"
-          git commit -m "chore: $APP $ENVIRONMENT 이미지 태그 갱신 (${SHA::7})"
-          git pull --rebase origin "$INFRA_REF"
-          git push origin "HEAD:$INFRA_REF"
+          git add "deploy/values-$ENVIRONMENT.yaml"
+          git commit -m "chore: $ENVIRONMENT 이미지 태그 갱신 (${SHA::7}) [skip ci]"
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:$BRANCH"

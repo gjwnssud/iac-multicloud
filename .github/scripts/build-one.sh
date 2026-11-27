@@ -4,7 +4,7 @@
 # 사용: build-one.sh <app> <build-context-dir> <values-file> <sha>
 # 전제: 러너에 nerdctl/buildctl/containerd·buildkit 소켓/k3s가 마운트되어 있고(github_runner_build_tools_enabled),
 #       같은 노드에 로컬 레지스트리(registry 롤)가 떠 있다. values 파일은 미리 존재해야 한다(= 배포 대상 선언).
-# 이 저장소의 build-images.sh(저장소 내 앱)와 외부 앱 저장소용 재사용 workflow(build-app-image.yml)가 공용으로 쓴다.
+# 앱 저장소가 호출하는 재사용 workflow(build-app-image.yml)에서 사용한다.
 set -euo pipefail
 
 app="${1:?app}"; context="${2:?build context}"; values="${3:?values file}"; sha="${4:?sha}"

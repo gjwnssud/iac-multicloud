@@ -1,5 +1,5 @@
-github_runner_repo: "" # 예: gjwnssud/iac-multicloud (필수)
-github_runner_pat: "" # repo scope PAT. 절대 커밋 금지 - ansible-vault로 암호화해 -e로 전달
+github_runner_repo: "" # 필수. "owner/repo"면 저장소 러너, "org"(슬래시 없음)면 organization 러너 (org의 모든 저장소가 공유, PAT에 admin:org 필요)
+github_runner_pat: "" # repo scope PAT (organization 러너는 admin:org scope). 절대 커밋 금지 - ansible-vault로 암호화해 -e로 전달
 github_runner_labels: "self-hosted,{{ inventory_hostname }}"
 github_runner_arch: x64 # x86_64 호스트 기본값. arm64 호스트는 arm64로 override
 github_runner_version: "2.337.0"

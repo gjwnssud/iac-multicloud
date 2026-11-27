@@ -1,5 +1,6 @@
-# apps/<app>/values-libvirt.yaml 이 있는 앱을 자동 발견해 범용 chart(charts/app)로 배포한다.
-# 새 앱 추가 = apps/<app>/values-libvirt.yaml 파일 추가 (이 파일은 수정 불필요).
+# GitHub organization에서 topic "homelab-app"이 붙고 deploy/values-libvirt.yaml 이 있는 저장소를 자동 발견해
+# 이 인프라 저장소의 범용 chart(charts/app)로 배포한다. 앱 저장소가 생기면 이 파일은 수정하지 않는다.
+# 전제: argocd 네임스페이스에 Secret github-token(key: token)이 있어야 한다 (docs/adding-an-app.md 0절).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -9,14 +10,22 @@ spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
-    - git:
-        repoURL: https://github.com/gjwnssud/iac-multicloud.git
-        revision: main
-        files:
-          - path: "apps/*/values-libvirt.yaml"
+    - scmProvider:
+        github:
+          organization: hznlabs
+          tokenRef:
+            secretName: github-token
+            key: token
+        filters:
+          - labelMatch: "^homelab-app$"
+            pathsExist:
+              - deploy/values-libvirt.yaml
+        requeueAfterSeconds: 180
   template:
     metadata:
-      name: '{{ .path.basename }}-libvirt'
+      name: '{{ .repository }}-libvirt'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
     spec:
       project: default
       sources:
@@ -24,17 +33,17 @@ spec:
           targetRevision: main
           path: charts/app
           helm:
-            releaseName: '{{ .path.basename }}'
+            releaseName: '{{ .repository }}'
             ignoreMissingValueFiles: true
             valueFiles:
-              - $values/apps/{{ .path.basename }}/values.yaml
-              - $values/apps/{{ .path.basename }}/values-libvirt.yaml
-        - repoURL: https://github.com/gjwnssud/iac-multicloud.git
-          targetRevision: main
+              - $values/deploy/values.yaml
+              - $values/deploy/values-libvirt.yaml
+        - repoURL: '{{ .url }}'
+          targetRevision: '{{ .branch }}'
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{ .path.basename }}'
+        namespace: '{{ .repository }}'
       syncPolicy:
         automated:
           prune: true

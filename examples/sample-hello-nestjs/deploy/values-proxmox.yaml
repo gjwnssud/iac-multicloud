@@ -1,0 +1,4 @@
+replicaCount: 1
+env:
+  ENVIRONMENT: proxmox
+# image.repository/tag 는 CI(build-app-image.yml)가 빌드 후 이 파일에 기록한다

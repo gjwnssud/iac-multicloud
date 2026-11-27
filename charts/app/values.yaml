@@ -1,8 +1,8 @@
-# 범용 앱 chart 기본값. 앱별로는 apps/<app>/values.yaml, 환경별로는 apps/<app>/values-<env>.yaml 에서 덮어쓴다.
+# 범용 앱 chart 기본값. 앱 저장소의 deploy/values.yaml(공통)과 deploy/values-<env>.yaml(환경별)에서 덮어쓴다.
 replicaCount: 1
 
 image:
-  repository: ""        # 필수. 예: 10.77.0.122:5000/my-app (build-images.yml이 values-<env>.yaml 에 자동 기입)
+  repository: ""        # 필수. 예: 10.77.0.122:5000/my-app (build-app-image.yml이 deploy/values-<env>.yaml 에 자동 기입)
   tag: latest
   pullPolicy: IfNotPresent
 
